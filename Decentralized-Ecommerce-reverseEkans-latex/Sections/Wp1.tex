@@ -1,0 +1,322 @@
+% Copyright 2025 Emanuele Relmi
+%
+% Licensed under the Apache License, Version 2.0 (the "License");
+% you may not use this file except in compliance with the License.
+% You may obtain a copy of the License at
+%
+%     http://www.apache.org/licenses/LICENSE-2.0
+%
+% Unless required by applicable law or agreed to in writing, software
+% distributed under the License is distributed on an "AS IS" BASIS,
+% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+% See the License for the specific language governing permissions and
+% limitations under the License.
+
+\chapter{WORK PACKAGE 1}
+    In questo primo Work Package definiamo il modello di riferimento per il sistema decentralizzato di recensioni. Identifichiamo innanzitutto gli attori onesti coinvolti nel sistema, analizzando i loro obiettivi e le funzionalità che si intendono realizzare. \\
+    Gli attori onesti sono quegli individui o entità che agiscono in conformità con le regole e le politiche stabilite, cercando di raggiungere i loro obiettivi senza compromettere l'integrità del sistema.
+    Successivamente, esamineremo i possibili avversari (o Threat Models) che potrebbero essere interessati a compromettere il sistema, esaminando le loro risorse e le motivazioni che li spingono ad agire.
+    Questa analisi ci permetterà di identificare gli attacchi che il sistema potrebbe subire e di comprendere quali misure di sicurezza dovranno essere adottate per contrastarli.
+    Una volta compreso il contesto in cui il sistema opera, identificheremo le proprietà di sicurezza che si vorrebbero preservare in presenza di attacchi.
+    Queste proprietà sono fondamentali per garantire il corretto funzionamento del sistema e la protezione delle informazioni sensibili.
+    
+    \section{Descrizione del modello}
+        Il sistema che intendiamo progettare mira a decentralizzare la gestione delle recensioni all'interno delle piattaforme di e-commerce, sfruttando una blockchain per garantire:
+            \begin{itemize}
+                \item autenticità delle recensioni
+        
+                \item trasparenza nell'ordinamento e nella visibilità delle recensioni
+        
+                \item immutabilità delle valutazioni una volta registrate (se non nelle condizioni di modifica/revoca definite)
+        
+                \item incentivazione alla partecipazione onesta
+            \end{itemize}
+        
+        Gli utenti devono essere verificati come effettivi acquirenti di un determinato prodotto prima di poter rilasciare una recensione, le quali saranno poi memorizzate sulla blockchain.
+        Il sistema prevede anche meccanismi anti-frode, come la prevenzione da account falsi e la penalizzazione dell'inattività o dei comportamenti manipolativi.
+    
+    \section{Attori del Sistema}
+        \subsection{Utente}
+            Gli utenti acquirenti sono soggetti che effettuano acquisti reali tramite la piattaforma. Dopo aver completato una transazione, essi hanno il diritto di rilasciare una recensione sul prodotto acquistato. L'obiettivo dell'utente è condividere la propria esperienza di acquisto in modo onesto, contribuendo così a costruire una base di recensioni affidabili per la comunità. L'utente deve poter contare su un sistema che protegga la sua identità tramite forme di pseudo-anonimato, pur garantendo la verificabilità della sua legittimità come recensore effettivo. Inoltre, deve avere la possibilità di modificare o revocare la propria recensione secondo condizioni predefinite e di contribuire alla qualità del sistema tramite la pubblicazione di recensioni oneste e tempestive.
+        
+        \subsection{Venditori}
+           I venditori sono attori che propongono prodotti all'interno del marketplace. Il loro interesse principale è ottenere feedback autentici sui propri articoli, che riflettano realmente la qualità dei beni offerti. Attraverso il sistema di recensioni decentralizzate, il venditore può migliorare la propria reputazione in modo trasparente e meritocratico. I venditori onesti si impegnano a non tentare di manipolare il sistema, né incentivando recensioni false, né ostacolando recensioni negative legittime.
+            
+        \subsection{La piattaforma di e-commerce}
+           La piattaforma di e-commerce rappresenta l'interfaccia principale tramite cui avviene l'interazione tra utenti e prodotti. Essa si occupa di verificare localmente l'avvenuto acquisto e di emettere un attestato crittografico (NFT non trasferibile) che costituisce la Proof-of-Purchase (PoP), poi utilizzata per autorizzare la pubblicazione di recensioni. Inoltre, la piattaforma fornisce accesso agli smart contract e alla rete blockchain tramite la dApp, ma non controlla direttamente né l'ordinamento né la registrazione delle recensioni, che sono gestiti in modo autonomo e trasparente dalla logica on-chain. La piattaforma deve essere progettata per non poter alterare la visibilità delle recensioni, garantendo l'imparzialità e la non manipolabilità del sistema.
+
+        \subsection{Validator della blockchain}
+            I validators sono attori fondamentali per il corretto funzionamento dell'infrastruttura blockchain su cui si basa il sistema di recensioni per l'e-commerce.
+            Il loro compito consiste nel validare e inserire in blocchi le transazioni effettuate dagli utenti, tra cui l'inserimento delle recensioni e le eventuali revoche o modifiche autorizzate. 
+            Nel modello proposto, si assume che i validators si comportino in modo corretto, ovvero eseguano le operazioni previste dal protocollo di consenso in modo imparziale e senza manipolazioni. In particolare, si presume che i blocchi prodotti rispettino l'ordine temporale delle transazioni, che non vi siano censure arbitrarie e che le operazioni valide non vengano rifiutate. I validators onesti rappresentano la garanzia che le regole del sistema vengano applicate in modo coerente, assicurando proprietà fondamentali come l'immutabilità, la tracciabilità e la trasparenza dei dati memorizzati sulla blockchain.
+
+    \section{Attaccanti del Sistema}
+        Nel contesto del sistema descritto, è fondamentale analizzare e comprendere i potenziali attaccanti che potrebbero cercare di comprometterlo, considerando le motivazioni e le risorse a loro disposizione.
+        Questi attori e gruppi di attaccanti rappresentano diverse minacce al sistema e richiedono misure di sicurezza specifiche per essere contrastati efficacemente.
+    
+        \begin{itemize}
+            \item \textbf{Utente fraudolento}
+                \begin{itemize}                    
+                    \item \textbf{Descrizione:}  Si tratta di un avversario che cerca deliberatamente di compromettere l'affidabilità del sistema utilizzando una singola identità per inviare recensioni false o fuorvianti. Può tentare di ottenere un NFT senza aver realmente effettuato un acquisto (eg. tramite exploit della piattaforma o uso non autorizzato di NFT altrui), oppure utilizzare una Verifiable Credential compromessa o falsificata. Il suo obiettivo è alterare la reputazione dei prodotti senza possedere un diritto legittimo alla recensione.
+                   
+                    \item \textbf{Risorse}
+                        \begin{itemize}
+                            \item Capacità tecniche medie per aggirare i meccanismi di verifica
+    
+                            \item Uso di NFT ottenuti fraudolentemente o riutilizzati
+    
+                            \item Possesso di VC rubate o mal rilasciate
+                        \end{itemize}
+                \end{itemize}
+    
+            \item \textbf{Venditore malevolo}
+                \begin{itemize}                    
+                    \item \textbf{Descrizione:} è un attore che, pur facendo parte legittimamente del sistema, tenta di manipolarne il funzionamento per aumentare artificialmente la propria reputazione. Può commissionare recensioni false a utenti fraudolenti o tentare di incentivare solo recensioni positive offrendo sconti o regali. Talvolta agisce anche in modo sleale contro concorrenti, cercando di sabotarne la reputazione con feedback negativi fittizi.
+                    
+                    \item \textbf{Risorse}
+                        \begin{itemize}
+                            \item Budget economico per incentivare utenti malintenzionati
+        
+                            \item Reti di profili social o identità multiple
+        
+                            \item Accesso a piattaforme esterne per organizzare campagne coordinate
+                        \end{itemize}
+                \end{itemize}
+    
+            \item \textbf{Attaccante Sybil}
+                \begin{itemize}                    
+                    \item \textbf{Descrizione:} Un attaccante Sybil genera un gran numero di identità pseudo-anonime (DID) ciascuna associata a una Verifiable Credential apparentemente valida, con l'obiettivo di manipolare il sistema scrivendo più recensioni false, creando così un'impressione artificiale di consenso o popolarità.
+                    
+                    \item \textbf{Risorse}
+                        \begin{itemize}
+                            \item Automazione per la creazione di molteplici DID e wallet
+        
+                            \item Accesso a più VC emesse fraudolentemente o a issuer compromessi
+
+                            \item Capacità di orchestrare pubblicazioni multiple coordinate
+                        \end{itemize}
+                \end{itemize}
+    
+            \item \textbf{Identity Thief}
+                \begin{itemize}    
+                    \item \textbf{Descrizione:} avversario che possiede o mira a rubare identità e/o credenziali per impersonare gli utenti legittimi e ottenere accesso non autorizzato ai servizi.
+                    Potrebbe utilizzare tecniche di phishing, furto di credenziali o exploit delle vulnerabilità per ottenere informazioni sensibili e assumere l'identità di altri utenti.
+    
+                    \item \textbf{Risorse}
+                        \begin{itemize}
+                            \item Disponibilità di risorse computazionali sufficienti per eseguire attacchi brute-force, decrittazione o altri metodi per ottenere informazioni sensibili o compromettere la sicurezza del sistema
+
+                            \item Possesso di un vasto database di informazioni personali ottenute illegalmente, che consente la creazione di profili dettagliati delle vittime e di utilizzare le informazioni per scopi malevoli
+    
+                            \item Competenze nel phishing e nell'ingegneria sociale, capacità di creare siti web e messaggi convincenti
+                        \end{itemize}
+                \end{itemize}
+    
+            \item \textbf{Insider malevolo}
+                \begin{itemize}                    
+                    \item \textbf{Descrizione:} si tratta di un utente reale che ha accesso legittimo al sistema (acquirente o venditore), ma che sfrutta tale accesso per aggirare le regole, ad esempio vendendo le proprie credenziali. Può anche collaborare con un venditore per manipolare le recensioni in cambio di vantaggi.
+                    
+                    \item \textbf{Risorse}
+                        \begin{itemize}
+                            \item Accesso autentico al sistema
+        
+                            \item Conoscenza delle regole di funzionamento
+        
+                            \item Comunicazioni private con altri attori coinvolti
+                        \end{itemize}
+                \end{itemize}
+    
+            \item \textbf{Reviewer a pagamento}
+                \begin{itemize}                    
+                    \item \textbf{Descrizione:}  è un attore esterno che fornisce recensioni dietro compenso, fingendo esperienze d'acquisto mai avvenute. Opera in coordinamento con venditori maliziosi o agenzie di marketing scorrette. L'attività si basa sull'acquisizione o l'aggiramento delle prove d'acquisto (PoP), sfruttando identità multiple o strumenti per eludere i controlli anti-frode del sistema.
+                    
+                    \item \textbf{Risorse}
+                        \begin{itemize}
+                            \item Identità multiple o prestanome
+    
+                            \item Esperienza nel mascherare pattern ripetitivi
+
+                            \item Account acquistati o affittati già “invecchiati” per aggirare controlli
+                        \end{itemize}
+                \end{itemize}
+    
+            \item \textbf{Validator corrotto}
+                \begin{itemize}                    
+                    \item \textbf{Descrizione:}  in una blockchain, i validators hanno il compito di includere o rifiutare transazioni. Un validator corrotto può censurare recensioni sgradite o includere solo quelle sponsorizzate, sabotando la neutralità del sistema.
+                    
+                    \item \textbf{Risorse}
+                        \begin{itemize}
+                            \item Accesso diretto al consenso del sistema
+        
+                            \item Collusione con altri validatori o attori
+
+                            \item Capacità di censura selettiva e invisibile
+                        \end{itemize}
+                \end{itemize}
+
+            \item \textbf{Venditore Collusivo Fuori Sistema}
+                \begin{itemize} 
+                    \item \textbf{Descrizione:} si tratta di un venditore che, pur operando apparentemente in modo regolare sulla piattaforma, contatta l'acquirente attraverso canali esterni (eg. email, social network, app di messaggistica) dopo l'acquisto, proponendo un rimborso parziale o totale in cambio di una recensione positiva. L'obiettivo di questo comportamento è quello di ottenere feedback favorevoli per migliorare la propria reputazione pubblica, senza che l'incentivo illecito venga rilevato dal sistema di recensioni. Dal punto di vista del protocollo, la recensione appare autentica (l'utente ha realmente acquistato il prodotto), ma è in realtà distorta da un accordo economico privato non verificabile, che mina la trasparenza e l'affidabilità del sistema.
+    
+                    \item \textbf{Risorse}
+                        \begin{itemize}
+                            \item Accesso ai dati di contatto del cliente post-acquisto
+    
+                            \item Canali alternativi (email, social, chat) per negoziare incentivi non tracciabili
+        
+                            \item Capacità di effettuare rimborsi discreti tramite metodi esterni al sistema (PayPal, crypto, buoni regalo, ecc.)
+                        \end{itemize}
+                \end{itemize}
+
+            \item \textbf{Attaccante di tipo phishing/malware}
+                \begin{itemize}
+                    \item \textbf{Descrizione:} un avversario che tenta di ottenere l'accesso alle chiavi private di un utente tramite phishing o malware. Compromette il controllo su wallet o dispositivi, può firmare transazioni arbitrarie, inviare recensioni fraudolente o riscattare incentivi legittimi altrui.
+                    
+                    \item \textbf{Risorse}
+                        \begin{itemize}
+                            \item Capacità tecniche medie per creare pagine clone, app dannose o estensioni malevole.
+                            
+                            \item Accesso a database di email/identità per campagne phishing mirate.
+                            
+                            \item Malware per keylogging, intercettazione clipboard o inject di firma.
+                        \end{itemize}
+                \end{itemize}
+
+            \item \textbf{Issuer compromesso}
+                \begin{itemize}
+                    \item \textbf{Descrizione:} un'entità formalmente affidabile (Issuer) che, a seguito di compromissione o comportamento malevolo, emette Verifiable Credentials (VC) false o duplicate. Queste credenziali possono essere utilizzate per creare account multipli o alterare l'equilibrio reputazionale del sistema.
+                    
+                    \item \textbf{Risorse}
+                        \begin{itemize}
+                            \item Accesso al proprio sistema di emissione VC e alla chiave privata di firma.
+                            
+                            \item Collaborazione con attori esterni che utilizzano le VC emesse.
+                            
+                            \item Capacità di firmare VC formalmente valide ma semanticamente scorrette.
+                        \end{itemize}
+                \end{itemize}
+
+
+            \item \textbf{Attaccante passivo di rete}
+                \begin{itemize}
+                    \item \textbf{Descrizione:} un osservatore che intercetta comunicazioni, come l'invio di una Verifiable Presentation, tra utente e smart contract. Se non viene usata una challenge o un nonce dinamico, può riutilizzare una presentazione firmata per replicare un'azione (replay attack), anche senza accedere alla chiave privata dell'utente.
+                    
+                    \item \textbf{Risorse}
+                        \begin{itemize}
+                            \item Capacità di intercettare pacchetti o monitorare traffico su canali insicuri.
+                            
+                            \item Tool di replay automatico e scripting.
+                            
+                            \item Accesso alla rete o a browser compromessi.
+                        \end{itemize}
+                \end{itemize}
+
+            \item \textbf{Analista comportamentale (Data Correlator)}
+                \begin{itemize}
+                    \item \textbf{Descrizione:} attore passivo che, senza alterare il sistema, analizza in modo massivo metadati pubblici (timestamp, hash, CID IPFS, ecc.) per tentare di correlare le azioni di uno stesso utente su DID diversi, violando l’unlinkability. Può impiegare tecniche di fingerprinting, clustering temporale o analisi predittiva, agendo come "profilatore" degli utenti.
+                    
+                    \item \textbf{Risorse}
+                        \begin{itemize}
+                            \item Accesso completo ai dati pubblici della blockchain e dei CID IPFS.
+                            
+                            \item Competenze statistiche e di data mining.
+                            
+                            \item Capacità di analisi AI per identificare pattern temporali e linguistici.
+                        \end{itemize}
+                \end{itemize}
+        \end{itemize}
+    
+    \section{Proprietà}
+        L'obiettivo di questo progetto è sviluppare un sistema di recensioni decentralizzato per l’e-commerce, capace di offrire un ambiente affidabile, trasparente e resistente a manipolazioni. Il sistema permette agli utenti di recensire prodotti soltanto dopo averne dimostrato l'acquisto tramite meccanismi di verifica e garantisce che tali recensioni siano pubblicate in modo immutabile e consultabile da tutti. Allo stesso tempo, è previsto il supporto per la modifica o revoca delle recensioni secondo condizioni predefinite con logiche di incentivazione/disincentivazione. Per garantire la robustezza del sistema in un ambiente basato su blockchain è necessario definire con precisione alcune proprietà fondamentali: confidenzialità, privacy (selective disclosure), integrità, trasparenza ed efficienza. Queste proprietà sono essenziali non solo per il corretto funzionamento del sistema in condizioni normali, ma anche per assicurare la resilienza rispetto a comportamenti malevoli, come la creazione di identità false, la compravendita di feedback o la manipolazione della visibilità delle recensioni. La loro implementazione costituisce la base per un modello credibile, meritocratico e decentralizzato di reputazione online.
+        
+        \subsection{Confidenzialità}
+            \begin{itemize}
+                \item \textbf{C1:} L'identità reale dell'utente non deve essere associata pubblicamente alle recensioni espresse. Ogni interazione deve avvenire tramite identificatori pseudo-anonimi, eventualmente riconducibili all'utente solo in presenza di specifiche condizioni legali.
+                
+                \item \textbf{C2:} Tutte le comunicazioni tra client e piattaforma, comprese le operazioni di verifica d'acquisto (Proof-of-Purchase) e scrittura recensioni, devono avvenire tramite canali sicuri e cifrati (eg. TLS o crittografia applicativa end-to-end).
+                
+                \item \textbf{C3:} Il sistema deve ridurre al minimo i metadati esposti (eg. timestamp precisi, IP, pattern comportamentali) per evitare rischi di deanonimizzazione tramite tecniche di correlazione.
+
+                \item \textbf{C4:} Il sistema deve evitare che le attività di uno stesso utente possano essere correlate tra loro nel tempo, a meno che l'utente stesso non lo autorizzi esplicitamente. Questo implica l'uso di tecniche come l'impiego di chiavi crittografiche diverse per ogni recensione. In questo modo si riduce il rischio di tracciamento comportamentale a lungo termine e si protegge ulteriormente il diritto alla riservatezza dell'utente.
+            \end{itemize}
+
+        \subsection{Privacy}
+            Il sistema impiega identificatori pseudo-anonimi (DID) e credenziali verificabili (VC) per proteggere l'identità dell'utente, garantendo che ogni interazione sia verificabile, ma non tracciabile.
+            A tal fine, vengono rispettate le seguenti proprietà:            
+                \begin{itemize}
+                    \item \textbf{Minimizzazione dei dati (Minimization)}: ogni transazione include solo le informazioni strettamente necessarie (eg. hash del contenuto, identificativo del token), evitando esposizione di dati personali o metadati sensibili.
+                
+                    \item \textbf{Verificabilità condizionata (Predicate Disclosure)}: l'utente può dimostrare di aver diritto a pubblicare una recensione (eg. possesso di NFT e VC valida), senza rivelare la propria identità reale né altri attributi non necessari.
+                
+                    \item \textbf{Non tracciabilità (Unlinkability)}: recensioni diverse inviate dallo stesso utente non sono collegabili tra loro, a meno che l'utente non decida volontariamente di accumulare reputazione aggregata (via prove ZKP). In tal caso, la verifica avviene in modo crittograficamente sicuro, senza comprometterne l'anonimato.
+                
+                    \item \textbf{Non riutilizzabilità (Non-transferability)}: ogni NFT può essere impiegato una sola volta per scrivere una recensione, impedendo la duplicazione o la cessione dei diritti di pubblicazione.
+                
+                    \item \textbf{Non falsificabilità (Unforgeability)}: ogni credenziale e ogni transazione è firmata digitalmente. Nessun utente può pubblicare una recensione senza possedere sia una VC valida che un NFT non scaduto o revocato.
+                
+                    \item \textbf{Protezione contro correlazioni (Untraceability)}: il sistema impiega DID diversi e rotabili per ogni interazione e minimizza i timestamp visibili, impedendo correlazioni tra recensioni inviate dallo stesso utente.
+                
+                    \item \textbf{Resistenza alla sorveglianza passiva (Unobservability)}: anche osservando il traffico blockchain o IPFS, un attore esterno non può inferire legami tra utenti, recensioni e reputazione, grazie all'uso di hash, CID e metadati minimizzati.
+                \end{itemize}
+
+            \noindent Queste proprietà derivano da una progettazione orientata alla privacy e all'autonomia dell'utente, ispirata ai principi del paradigma Self-Sovereign Identity e alle tecniche di presentazione selettiva delle credenziali (\textit{Selective Disclosure}).
+                        
+        \subsection{Integrità}
+            \begin{itemize}
+                \item \textbf{I1:} Ogni recensione deve essere immutabile una volta pubblicata, salvo condizioni specifiche di modifica o revoca definite a livello di smart contract.
+                
+                \item \textbf{I2:} Solo utenti che hanno effettivamente acquistato un prodotto devono poter lasciare una recensione; la verifica dell'acquisto deve essere crittograficamente solida e legata all'identità pseudo-anonima dell'utente.
+                
+                \item \textbf{I3:} Le recensioni devono essere firmate digitalmente, in modo da impedire manipolazioni o negazioni ex post (non ripudio).
+                
+                \item \textbf{I4:} Il sistema deve impedire che due utenti possano aggregare le proprie credenziali o attività per simulare una recensione congiunta o aumentare artificiosamente la reputazione di un contenuto.
+
+                \item \textbf{I5:} Il sistema deve garantire che le recensioni valide vengano registrate secondo l'ordine temporale con cui sono state emesse, senza che attori intermedi (eg. piattaforma, validator) possano ritardare o censurare selettivamente transazioni per influenzare la visibilità o la reputazione dei contenuti.
+            \end{itemize}
+            
+        \subsection{Trasparenza}
+            \begin{itemize}
+                \item \textbf{T1:} Gli algoritmi di ordinamento e visibilità delle recensioni devono essere pubblici e non modificabili, così da evitare favoritismi o manipolazioni da parte della piattaforma.
+                
+                \item \textbf{T2:} Tutte le transazioni rilevanti (recensioni, modifiche) devono essere consultabili pubblicamente sulla blockchain o in un registro parallelo verificabile, secondo il principio dell'immutabilità.
+                
+                \item \textbf{T3:} Le regole per la revoca o la modifica di una recensione devono essere chiare, predefinite e non arbitrate dalla piattaforma, ma applicate automaticamente dal sistema.
+                
+                \item \textbf{T4:} La fiducia in eventuali componenti terze (eg. piattaforma, validator) deve essere giustificata da meccanismi tecnici o economici che ne scoraggino comportamenti sleali (eg. penalità, perdita di reputazione, verifica pubblica).
+            \end{itemize}
+            
+        \subsection{Efficienza}
+            \begin{itemize}
+                \item \textbf{E1:} Il sistema consente una rapida verifica dell'acquisto, senza richiedere operazioni pesanti lato utente o validator.
+                
+                \item \textbf{E2:} Il processo di pubblicazione della recensione deve essere fluido e a basso costo computazionale, compatibile con dispositivi consumer (eg. smartphone).
+                
+                \item \textbf{E3:} Le operazioni crittografiche coinvolte (firma, verifica, Proof-of-Purchase) devono essere ottimizzate per l'uso quotidiano e non introdurre frizioni inutili nell'esperienza utente.
+                
+                \item \textbf{E4:} Il sistema deve essere progettato per gestire un elevato numero di recensioni e accessi contemporanei, mantenendo prestazioni stabili anche in caso di picchi di attività.
+            \end{itemize}
+    
+    \section{Completeness}
+        La proprietà di \textit{completeness} descrive il comportamento del sistema quando tutti gli attori coinvolti agiscono in modo onesto, rispettando le regole previste dal protocollo. In tale scenario, non si verificano attacchi né violazioni, e il sistema è in grado di offrire tutte le funzionalità desiderate in maniera sicura, trasparente ed efficiente.
+        
+        \noindent In particolare:
+        
+        \begin{itemize}
+            \item un utente effettua un acquisto legittimo attraverso una piattaforma e-commerce integrata con il sistema di recensioni;
+            
+            \item la piattaforma verifica e registra la transazione, generando una prova di acquisto (\textit{Proof-of-Purchase}) che attesta, in modo crittograficamente sicuro, che l'utente ha realmente usufruito del servizio;
+            
+            \item tramite un'identità pseudo-anonima, l'utente accede alla funzionalità di recensione e, dopo il superamento della verifica, redige un feedback firmato digitalmente, che viene inoltrato alla rete;
+            
+            \item i validator onesti includono la recensione nella blockchain secondo l'ordine cronologico, garantendone l'immutabilità, la tracciabilità e la pubblica consultabilità, senza censure né ritardi;
+            
+            \item la piattaforma mostra la recensione applicando criteri di ordinamento e visibilità pubblici, verificabili e non modificabili in modo arbitrario;
+            
+            \item l'utente ha facoltà, qualora previsto, di revocare o aggiornare la recensione entro i limiti e secondo le regole definite nel sistema (eg. tempo massimo, consenso firmato);
+            
+            \item l'utente riceve reputazione positiva se pubblica la recensione entro il tempo previsto, o negativa se non lo fa;
+            
+            \item il sistema assegna eventuali incentivi e reputazione sulla base del rispetto delle scadenze e della pubblicazione effettiva di recensioni;
+            
+            \item durante l'intero processo, il sistema protegge la privacy dell'utente, evitando l'esposizione di metadati sensibili e garantendo l'integrità e il corretto tracciamento di tutte le operazioni.
+        \end{itemize}

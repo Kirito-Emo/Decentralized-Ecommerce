@@ -1,0 +1,750 @@
+% Copyright 2025 Emanuele Relmi
+%
+% Licensed under the Apache License, Version 2.0 (the "License");
+% you may not use this file except in compliance with the License.
+% You may obtain a copy of the License at
+%
+%     http://www.apache.org/licenses/LICENSE-2.0
+%
+% Unless required by applicable law or agreed to in writing, software
+% distributed under the License is distributed on an "AS IS" BASIS,
+% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+% See the License for the specific language governing permissions and
+% limitations under the License.
+
+\chapter{WORK PACKAGE 2}
+    In questo capitolo viene proposta una soluzione progettuale che risponde al modello delineato nel \textit{Work Package 1 (WP1)}. L'obiettivo è progettare un sistema decentralizzato per la gestione di recensioni online affidabili nel contesto dell’e-commerce, che rispetti i vincoli funzionali e di sicurezza individuati, raggiungendo un ragionevole compromesso tra efficienza, trasparenza, confidenzialità, privacy e integrità. \\
+    La soluzione proposta si basa sull'utilizzo di una blockchain \textit{permissionless}, che garantisce l'immutabilità delle recensioni, la verificabilità pubblica delle interazioni e la resistenza a manipolazioni arbitrarie da parte di malintenzionati. Gli utenti interagiscono tramite identità pseudo-anonime e possono pubblicare recensioni solo a seguito della verifica crittografica dell'avvenuto acquisto. Tutte le interazioni significative (inserimento, modifica, revoca) sono firmate digitalmente e registrate on-chain, assicurando tracciabilità e non ripudio. \\
+    La progettazione presentata in questo WP descrive dettagliatamente il comportamento delle parti oneste coinvolte e i componenti principali del sistema, con particolare attenzione ai seguenti aspetti:
+        \begin{itemize}
+            \item Verifica dell'acquisto tramite meccanismi crittografici (\textit{Proof-of-Purchase}) legati all'identità pseudo-anonima dell'utente;
+            
+            \item Meccanismo di scrittura e pubblicazione delle recensioni, con struttura dei dati immutabile e regole di visibilità e ordinamento trasparenti e non modificabili;
+        
+            \item Sistema di reputazione basato esclusivamente sul comportamento verificabile (recensione pubblicata o meno), senza giudizi soggettivi da parte di altri utenti;
+        
+            \item Meccanismi di incentivazione che premiano automaticamente l'utente dopo l'acquisto, subordinatamente alla pubblicazione della recensione entro un tempo massimo stabilito;
+        
+            \item Possibilità di revoca o modifica delle recensioni secondo regole predefinite e automatizzate tramite smart contract;
+        
+            \item Protezione della privacy dell'utente e prevenzione della tracciabilità incrociata, nel rispetto dello pseudo-anonimato.
+    
+            \item Utilizzo del protocollo IPFS (InterPlanetary File System) per la conservazione off-chain di contenuti testuali delle recensioni, metadati sensibili, e registri di revoca.
+            Ogni contenuto archiviato è referenziato tramite il suo CID (Content Identifier), il cui hash è pubblicato on-chain.
+        \end{itemize}
+
+    \noindent Tutte le scelte architetturali saranno giustificate in relazione alle proprietà analizzate nel WP1 e alle minacce potenziali, per garantire la solidità e l'affidabilità del sistema.
+
+    \section{Architettura generale del sistema}
+        Il sistema proposto per la gestione decentralizzata delle recensioni nel contesto dell’e-commerce si basa su una rete blockchain \textit{permissionless}, supportata da smart contract e da una piattaforma applicativa decentralizzata (dApp) che funge da interfaccia utente. L'architettura è progettata per garantire un comportamento verificabile, trasparente e resistente alla manipolazione da parte di attori malevoli. Ogni interazione critica viene registrata on-chain, mentre i dati sensibili sono gestiti off-chain in modo sicuro.
+        
+        \subsection{Componenti principali del sistema}
+            \begin{itemize}
+                \item \textbf{Utente pseudo-anonimo} (\faUserSecret): ogni utente può acquistare prodotti tramite una piattaforma e-commerce compatibile con il sistema, per poi ricevere una prova crittografica (NFT) dell'avvenuto acquisto, la quale permette di scrivere una recensione entro 60 giorni.
+                Ogni utente è identificato tramite un \textbf{Decentralized Identifier (DID)} e, per garantire l'unicità logica della sua identità, riceve anche una \textbf{Verifiable Credential (VC)} rilasciata da un Issuer fidato.
+                La VC, conservata nel wallet dell'utente, consente di dimostrare in modo selettivo e pseudo-anonimo, tramite \textbf{Verifiable Presentation (VP)}, il diritto ad accedere alle funzionalità riservate (reputazione), senza esporre dati personali.
+                La reputazione dell'utente si basa esclusivamente sul comportamento oggettivo: se una recensione viene pubblicata entro il termine, la reputazione incrementa, altrimenti decresce.
+                Inoltre, la reputazione viene accumulata tramite meccanismi che consentono il rispetto della privacy dell'utente, infatti, il sistema supporta l'uso di DID multipli e tecniche di \textit{zero-knowledge proof} (ZKP) per proteggere l'identità e la reputazione.
+            
+                \item \textbf{Venditore} (\faShoppingBag): propone prodotti sulla piattaforma e riceve recensioni pubbliche. I venditori onesti accettano valutazioni autentiche e si affidano al sistema per costruire una reputazione meritocratica. Non interagiscono direttamente con la blockchain, ma la loro reputazione viene aggiornata automaticamente in base alle recensioni ricevute, senza che possano alterarne visibilità o ordine.
+            
+                \item \textbf{Piattaforma e-commerce} (\faShoppingCart): interfaccia applicativa utilizzata per l'interazione tra utente e sistema. Verifica localmente gli acquisti e genera un attestato (NFT) che costituisce la \textit{Proof-of-Purchase}, fornisce l'accesso ai moduli di recensione e inoltra le transazioni agli smart contract, ma non ha alcun controllo sulle regole di visibilità o ordinamento, che sono interamente delegate alla logica decentralizzata.
+            
+                \item \textbf{Smart Contract} (\faFileCode): rappresenta la componente logica del sistema. Gestisce la registrazione e verifica delle recensioni, la validazione degli NFT, la gestione della reputazione (anche via ZKP), e l'attribuzione degli incentivi in base a criteri deterministici, pubblici e immutabili, impedendo modifiche arbitrarie da parte di qualunque attore.
+            
+                \item \textbf{Blockchain permissionless} (\faCubes): tutte le operazioni rilevanti (pubblicazione recensioni, modifiche, revoche) sono registrate sulla blockchain, la quale garantisce immutabilità, tracciabilità e accessibilità pubblica, permettendo audit e verifica senza la necessità di fidarsi della piattaforma. L'adozione di una rete permissionless consente a chiunque di partecipare alla rete, riducendo la centralizzazione e impedendo la censura o l'alterazione dei contenuti registrati.
+            
+                \item \textbf{Validator onesti} (\faCube): nodi della rete responsabili della verifica e inclusione delle transazioni nei blocchi. Si assume che una maggioranza onesta segua il protocollo, assicurando che le recensioni valide vengano registrate in ordine cronologico, senza esclusioni o manipolazioni.
+            
+                \item \textbf{Modulo di audit pubblico} (\faEye): consente la verifica da parte di utenti o enti esterni dell'integrità del sistema, dei comportamenti registrati e delle metriche reputazionali, grazie alla trasparenza dei dati on-chain.
+            \end{itemize}
+        
+        \subsection{Modalità di gestione della reputazione}
+            La reputazione di ciascun utente è calcolata automaticamente sulla base del numero di NFT ricevuti e del numero di recensioni pubblicate nei tempi previsti.
+            
+                \begin{itemize}
+                    \item Ogni NFT rappresenta un'opportunità per pubblicare una recensione.
+                    
+                    \item Se l'utente recensisce entro 60 giorni, l’NFT è marcato come “utilizzato” e si assegna reputazione positiva.
+                    
+                    \item Se l'utente non recensisce entro il termine, l’NFT è marcato come “scaduto” e si assegna reputazione negativa.
+                \end{itemize}
+
+            \noindent L'utente può dimostrare, tramite prove a conoscenza zero, di aver maturato una reputazione positiva, senza rivelare identità o contenuti. Questo approccio consente di preservare la proprietà dell'anonimato e al contempo mitigare i rischi legati agli attacchi Sybil o alla creazione massiva di recensioni scollegate.
+
+    \section{Funzionamento delle parti oneste}
+        Questa sezione descrive il comportamento previsto delle componenti oneste del sistema, ovvero le entità che agiscono nel rispetto delle regole e delle proprietà progettuali identificate nel WP1. Ogni attore onesto segue un protocollo deterministico e verificabile, che garantisce il corretto funzionamento del sistema e la coerenza dei dati registrati on-chain. Le azioni compiute dai partecipanti sono regolate da procedure crittografiche sicure e dalla logica codificata nei contratti intelligenti, allo scopo di prevenire errori, frodi e ambiguità.
+        
+        \subsection{Gestione utente e creazione del DID}
+            Nel sistema proposto, la gestione dell'identità dell'utente si basa sull'impiego di \textit{Decentralized Identifiers (DID)}, ovvero identificatori univoci e pseudo-anonimi che permettono a ciascun utente di operare sulla piattaforma senza esporre la propria identità reale. I DID sono auto-generati dagli utenti in locale e sono legati a una coppia di chiavi crittografiche. Questa scelta garantisce un buon compromesso tra autenticità delle azioni e tutela della privacy.
+
+            \subsubsection{Registrazione iniziale}
+                \noindent Prima dell'avvio della procedura, l'utente si autentica tramite un sistema di identità digitale certificata, come \textbf{SPID} o \textbf{CIE}. Questa autenticazione consente all'Issuer di verificare l'identità reale dell'utente, mantenendo separati i dati personali dal successivo identificatore pseudo-anonimo (DID).
+                La prima interazione con la piattaforma è connotata dai seguenti passaggi:
+                    \begin{enumerate}
+                        \item L'utente genera localmente una \textbf{coppia di chiavi ($sk_{DID}$, $pk_{DID}$)} e il corrispondente DID (eg. \texttt{did:ethr:0xABC123...}), secondo lo standard \textit{W3C}.
+                        
+                        \item L'utente richiede una \textbf{Verifiable Credential (VC)} da un Issuer autorizzato, che attesta la validità della sua registrazione e firma la VC.
+
+                        \item L'utente memorizza la VC in un wallet compatibile (MetaMask).
+                    
+                        \item L'utente invia una \textbf{Verifiable Presentation (VP)}, un pacchetto firmato che dimostra il possesso della VC, e una firma al contratto di registrazione.
+                        
+                        \item Lo smart contract verifica:
+                            \begin{itemize}
+                                \item L'autenticità della VC e la firma del \textit{trusted Issuer};
+                                
+                                \item L'unicità della registrazione (la VC non è stata già usata);
+                                
+                                \item Il legame tra DID e chiave usata per firmare la richiesta.
+                            \end{itemize}
+                    
+                        \item Se tutte le verifiche hanno esito positivo, il DID viene registrato come identità pseudo-anonima abilitata all'uso della piattaforma, mediante il mapping \texttt{registered[DID] = hash(VC)}, che viene aggiornato on-chain.
+                    \end{enumerate}
+            
+                \paragraph{Vantaggi}
+                    L'adozione dei DID offre i seguenti benefici:
+                        \begin{itemize}
+                            \item \textbf{Privacy}: l'identità reale dell'utente non viene mai esposta on-chain.
+                            
+                            \item \textbf{Sybil resistance}: l'emissione della VC è vincolata a un'autorità che rilascia un solo attestato per identità reale, difatti l'uso di SPID o CIE come prerequisito per l'emissione impedisce la creazione di identità multiple, pur mantenendo il DID completamente pseudo-anonimo on-chain.
+                            
+                            \item \textbf{Autenticazione decentralizzata}: l'utente dimostra di essere titolare del DID tramite challenge-response, firmando ogni richiesta con la propria chiave privata.
+                            
+                            \item \textbf{Interoperabilità}: i DID possono essere riutilizzati in altri contesti Web3 compatibili, migliorando l'usabilità e la coerenza dell'identità decentralizzata.
+                        \end{itemize}
+                
+                \paragraph{Mitigazioni di sicurezza}
+                    Il sistema include alcune contromisure critiche:
+                        \begin{itemize}
+                            \item \textbf{Check di non riutilizzo}: ogni VC può essere usata una sola volta per registrare un DID.
+                            
+                            \item \textbf{Protezione contro identity theft}: solo il possessore della chiave privata può firmare la richiesta di accesso, riducendo il rischio di furti.
+                            
+                            \item \textbf{Registrazione dell’hash on-chain}: i contenuti delle VC, comprensivi di eventuali dati sensibili, sono conservati off-chain nel wallet dell'utente. Solo l’hash del documento viene registrato on-chain, al fine di garantire integrità e verificabilità, senza esporre il contenuto originale.
+                        \end{itemize}
+            
+                \noindent In questo modo, l'identificazione è solida e rispettosa della privacy, e il sistema impedisce la creazione di account multipli o il furto d'identità, senza la necessità di un'autorità centrale che conservi dati personali.
+            
+        \subsection{Venditore}
+            Il venditore propone un prodotto ed è soggetto alla ricezione di recensioni pubbliche. Non ha la possibilità di modificare, rimuovere o influenzare l'ordine, la visibilità o il contenuto delle recensioni associate ai propri prodotti. La reputazione del venditore è determinata in modo trasparente e automatico sulla base delle recensioni effettivamente pubblicate dai clienti che hanno completato un acquisto.
+            La piattaforma fornisce al venditore solo l'accesso alla consultazione pubblica dei dati registrati on-chain, senza controllo diretto sulle logiche di gestione.
+            
+        \subsection{Interazione dell'utente con il sistema tramite DID}
+            Una volta completata la fase di registrazione e ottenuto un identificatore decentralizzato (DID), l'utente è in grado di partecipare attivamente al sistema, mantenendo un livello elevato di riservatezza. Tutte le operazioni compiute vengono autorizzate attraverso la firma digitale generata con la propria chiave privata associata al DID, garantendo così l'autenticità delle azioni, senza mai esporre informazioni personali. Tutte le interazioni sono registrate tramite smart contract sulla blockchain.
+
+            \subsubsection{Pubblicazione di una recensione}
+                \noindent Quando l'utente finalizza un acquisto sulla piattaforma e-commerce, riceve un attestato crittografico sotto forma di \textbf{NFT non trasferibile} (\textit{soulbound token)} che ne conferma la transazione. Questo token funge da credenziale spendibile per l'invio di una recensione entro un termine massimo di 60 giorni. \\
+                Il processo si articola nei seguenti passaggi:
+                    \begin{itemize}
+                        \item L'utente redige la recensione e firma la richiesta con la chiave privata (EdDSA) associata al proprio DID;
+                        
+                        \item Invia la recensione e l'ID dell'NFT al contratto di gestione delle recensioni;
+                        
+                        \item Lo smart contract verifica che il token sia valido e appartenga all'utente, che non sia stato già utilizzato (\texttt{reviewUsed == false}) e che non sia scaduto;
+                        
+                        \item In caso di esito positivo, la recensione viene registrata on-chain e referenziata via IPFS, divenendo pubblicamente consultabile, e l'NFT viene marcato come usato. Inoltre, all'utente viene assegnata reputazione positiva e l'incentivo previsto viene immediatamente assegnato.
+                    \end{itemize}
+
+            \subsubsection{NFT non utilizzati}
+                \noindent Se l'utente non pubblica alcuna recensione entro il termine massimo di 60 giorni:
+                    \begin{itemize}
+                        \item lo smart contract marca l’NFT come “scaduto”;
+                        
+                        \item viene assegnata \textbf{reputazione negativa} all'utente.
+                    \end{itemize}
+                    
+            \subsubsection{Reputazione e prove crittografiche}
+                \noindent Per contribuire alla reputazione senza violare l'anonimato, l'utente può generare una \textbf{Zero-Knowledge Proof} che attesti proprietà aggregate, come:
+                    \begin{itemize}
+                        \item Numero minimo di recensioni pubblicate entro il termine previsto;
+                        
+                        \item Assenza di NFT scaduti o penalità reputazionali;
+                        
+                        \item Partecipazione continuativa e coerente nel tempo.
+                    \end{itemize}
+
+                \noindent La prova viene verificata da uno smart contract compatibile con circuiti ZK (Semaphore), senza che sia necessario rivelare esplicitamente il contenuto delle recensioni firmate né il DID dell'utente.
+
+            \subsubsection{Modifica e Revoca della Recensione}
+                \noindent Ogni recensione registrata sulla blockchain può essere successivamente \textbf{modificata} o \textbf{revocata} dall'autore legittimo, rispettando condizioni di integrità e trasparenza.
+                
+                \paragraph{Revoca}
+                    L'utente può revocare la propria recensione soltanto se:
+                        \begin{itemize}
+                            \item è ancora il proprietario del NFT associato (verifica ownership);
+                            
+                            \item non ha già modificato o revocato in precedenza la stessa recensione;
+                            
+                            \item la richiesta è firmata digitalmente con la propria chiave privata associata al DID.
+                        \end{itemize}
+                    
+                    \noindent La revoca è implementata come un evento immutabile \texttt{ReviewRevoked} che mantiene traccia della decisione e il contenuto della recensione viene sostituito con un placeholder nullo. Il token di prova d'acquisto viene comunque marcato come “consumato” e non potrà essere riutilizzato, impedendo strategie abusive.
+                
+                \paragraph{Modifica}
+                    L'autore può modificare il contenuto testuale di una recensione, purché:
+                        \begin{itemize}
+                            \item ne detenga ancora la proprietà (verifica NFT);
+                            
+                            \item il contenuto precedente non sia stato revocato;
+                            
+                            \item venga fornita una nuova versione firmata, referenziata tramite un identificatore crittografico univoco (hash) e memorizzata off-chain in modo verificabile.
+                        \end{itemize}
+                    
+                    \noindent Le modifiche:
+                        \begin{enumerate}
+                            \item invalidano la versione precedente della recensione, mantenendo la tracciabilità storica;
+                            
+                            \item vengono registrate come eventi di aggiornamento on-chain;
+                            
+                            \item sono visibili attraverso lo storico pubblico delle versioni.
+                        \end{enumerate}
+                
+                \paragraph{Cooldown}
+                    Per prevenire abusi da parte di recensori che aggiornano ripetutamente il contenuto, viene introdotto un periodo di cooldown minimo di 24 ore tra due modifiche successive.
+                                
+    \section{Utilizzo di NFT come prova di acquisto}
+        Per garantire che solo gli utenti che abbiano effettivamente acquistato un prodotto possano pubblicarne una recensione, il sistema impiega un meccanismo di \textbf{Proof-of-Purchase} basato su \textit{Non-Fungible Tokens (NFT)}. Ogni acquisto su una piattaforma e-commerce integrata genera un NFT. Il token rappresenta un attestato crittografico unico e verificabile, associato in modo univoco all'utente (tramite DID) e all'acquisto effettuato.
+
+        \subsection{Emissione del token}
+            Al momento della conferma di un acquisto su una piattaforma e-commerce integrata, lo smart contract corrispondente esegue il \textit{minting} di un NFT contenente:
+                \begin{itemize}
+                    \item \texttt{productId}: identificativo del prodotto acquistato;
+                    
+                    \item \texttt{ownerDID}: DID dell'utente;
+                    
+                    \item \texttt{purchaseDate}: data e ora dell'acquisto;
+
+                    \item \texttt{NFTstatus} == valid;
+                    
+                    \item \texttt{reviewStatus:} inizialmente impostato su \texttt{pending};
+                    
+                    \item Eventuali metadati (eg. nome del prodotto, codice ordine hashato).
+                \end{itemize}
+
+            \noindent Il token viene assegnato all'utente ed è \textbf{non trasferibile} (soulbound), inoltre viene marcato come utilizzato una volta impiegato per pubblicare una recensione. Questo previene il riutilizzo fraudolento e la possibilità di vendere il diritto di recensire.
+            Oltre all'NFT di acquisto, il sistema assegna automaticamente all'utente, dopo l'invio di una recensione,  un \textbf{badge soulbound} (NFT non trasferibile) che attesta la partecipazione al sistema di recensioni. Questo badge può essere usato per sbloccare funzionalità o status futuri.
+
+        \subsection{Verifica e pubblicazione della recensione}
+            L'utente può utilizzare l’NFT ricevuto per pubblicare una recensione entro 60 giorni dalla data di acquisto. Per fare ciò, deve presentare:
+                \begin{itemize}
+                    \item Il contenuto della recensione, firmato con la propria chiave privata;
+                    
+                    \item L'identificativo dell'NFT associato all'acquisto.
+                \end{itemize}
+        
+            \noindent Lo smart contract verifica che:
+                \begin{itemize}
+                    \item Il token sia ancora valido e appartenga all'utente;
+                    
+                    \item Che lo stato (\texttt{reviewStatus}) sia ancora \texttt{pending};
+                    
+                    \item Che non siano trascorsi più di 60 giorni dalla data di acquisto.
+                \end{itemize}
+        
+            \noindent Se tutti i controlli sono soddisfatti:
+                \begin{itemize}
+                    \item La recensione viene registrata sulla blockchain (hash su IPFS);
+                    
+                    \item Il token viene marcato come usato (\texttt{NFTstatus == used});
+                    
+                    \item viene assegnata reputazione positiva all'utente.
+                \end{itemize}
+
+            \noindent Se la recensione viene pubblicata entro il termine, oltre all'incremento reputazionale, può essere aggiornato anche il livello del badge NFT posseduto, per riflettere il grado di partecipazione, secondo il seguente schema:
+                \begin{itemize}
+                    \item \texttt{Bronze Reviewer} – 1 recensione pubblicata;
+                    
+                    \item \texttt{Silver Reviewer} – almeno 10 recensioni puntuali;
+                    
+                    \item \texttt{Gold Reviewer} – almeno 50 recensioni e zero penalità.
+                \end{itemize}
+
+        \subsection{NFT scaduti}
+            Se l'utente non recensisce entro 60 giorni:
+                \begin{itemize}
+                    \item lo smart contract marca l’NFT come scaduto (\texttt{NFTstatus == expired});
+                    \item viene automaticamente assegnata una penalità reputazionale (reputazione negativa).
+                \end{itemize}
+        
+            \noindent Questa logica incoraggia gli utenti a contribuire attivamente al sistema di recensioni e scoraggia comportamenti inattivi o opportunistici.
+
+        \subsection{Vantaggi della soluzione NFT}
+            L'adozione di NFT soulbound per rappresentare la prova d'acquisto offre numerosi vantaggi, tra cui:
+            \begin{itemize}
+                    \item \textbf{Immutabilità e trasparenza}: la prova dell'acquisto è pubblica e verificabile da chiunque;
+                    
+                    \item \textbf{Autenticità verificabile on-chain (Non ripudio)}: ogni recensione è legata in modo inequivocabile a un acquisto valido tramite un token pubblico;
+                    
+                    \item \textbf{Resistenza allo spam}: un solo acquisto equivale ad un solo diritto di recensire;
+
+                    \item \textbf{Resistenza alla manipolazione:} gli NFT non sono trasferibili né falsificabili;
+                    
+                    \item \textbf{Compatibilità con reputazione verificabile}: la presenza o l'uso degli NFT può contribuire a meccanismi di reputazione, validabili via ZKP;
+
+                    \item \textbf{Automazione reputazionale:} il sistema calcola la reputazione esclusivamente sulla base del comportamento verificabile;
+    
+                    \item \textbf{Incentivazione tempestiva:} l'utente riceve l'incentivo subito dopo l'acquisto, ma la reputazione dipende dal rispetto del termine di pubblicazione.
+                \end{itemize}
+        
+            \noindent L'intero processo di generazione e verifica del token avviene on-chain, per assicurare massima affidabilità, trasparenza e auditabilità. Tuttavia, i metadati estesi o sensibili (eg. descrizione completa dell'ordine) sono conservati off-chain, tramite IPFS, e referenziati via hash, per ridurre costi e tutelare la privacy.
+
+    \section{Uso delle Verifiable Credentials nel sistema}
+        Per rafforzare il controllo sull'unicità e sull'autenticità delle identità senza rinunciare al principio di pseudo-anonimato, il sistema adotta il modello delle \textbf{Verifiable Credentials (VC)}, standardizzato dal W3C. Le VC permettono di attestare in modo sicuro e crittograficamente verificabile che un determinato DID appartenga a un utente registrato, senza dover rivelare direttamente l'identità reale.
+
+        \subsection{Emissione della Verifiable Credential}
+            Durante la fase di registrazione, l'utente interagisce con un'entità di fiducia, che agisce come \textit{Issuer}, la quale rilascia una credenziale firmata (VC) contenente informazioni minime che attestano la registrazione dell'utente. \\
+            La VC include:
+                \begin{itemize}
+                    \item L'identificatore del soggetto (\texttt{did:ethr:0xABC123...});
+                    
+                    \item Lo stato di utente verificato (eg. \texttt{verified-user: true});
+                    
+                    \item L'identificativo dell'Issuer;
+                    
+                    \item La firma crittografica della VC (EdDSA);
+                    
+                    \item Data di scadenza e condizioni di revoca.
+                \end{itemize}
+        
+            \noindent La credenziale viene conservata nel wallet dell'utente (MetaMask con plugin VC) e non è pubblicata on-chain. Solo il suo hash può essere referenziato per finalità di verifica, riducendo l'esposizione di metadati sensibili.
+
+        \subsection{Presentazione e verifica}
+            Quando un utente desidera compiere un'operazione vincolata all'identità (registrarsi, scrivere una recensione), genera una \textbf{Verifiable Presentation (VP)}. \\
+            La VP è una struttura firmata che contiene:
+                \begin{itemize}
+                    \item La VC originale o selezionata parzialmente (selective disclosure);
+                    
+                    \item Una \textbf{challenge} generata dal verificatore, usata per impedire replay-attack;
+                    
+                    \item Una firma che prova il possesso legittimo della VC.
+                \end{itemize}
+            
+            \noindent Lo smart contract agisce da \textbf{Verifier} e controlla:
+                \begin{itemize}
+                    \item La validità della firma dell'Issuer (\textit{trusted Issuer});
+                    
+                    \item Che la VC non sia scaduta o revocata (tramite \texttt{revocation registry});
+                    
+                    \item Che la presentazione non sia stata già riutilizzata (\textit{non replayable});
+                    
+                    \item Che il DID sia legittimo e coerente con la registrazione.
+                \end{itemize}
+
+            \noindent Solo se tutte queste condizioni risultano soddisfatte, l'azione richiesta dall'utente viene autorizzata.
+
+        \subsection{Gestione della Revoca delle VC}
+            La revoca delle Verifiable Credentials (VC) è fondamentale per garantire la validità e unicità dell'identità nel tempo, in particolare in caso di compromissione, riemissione o declassamento dell'identità stessa.
+            
+            \subsubsection{Modello adottato}
+                \noindent Il sistema adotta il modello \textbf{W3C Revocation List 2020}, in cui ogni VC include un \texttt{revocationIndex} associato a una bitstring pubblica.
+                La lista di revoca è mantenuta \textit{off-chain} e distribuita tramite \textit{IPFS}. Ogni versione è identificata da un \textbf{CID (Content Identifier)}, pubblicato dallo smart contract dell'Issuer.
+                In questo modo, ogni utente o smart contract può accedere al file JSON firmato, scaricarlo da IPFS e verificare lo stato di revoca senza dipendere da API centralizzate.
+            
+            \subsubsection{Verifica della validità}
+                \noindent Al momento della presentazione di una VC, lo smart contract recupera l'hash della stessa e l'indice di revoca e verifica che il bit corrispondente nella bitstring non sia impostato a 1, altrimenti nega l'autorizzazione. \\
+        
+                \noindent In pseudo-codice:
+                    \begin{verbatim}
+                    if RevocationList[vcIndex] == 1 → reject
+                    \end{verbatim}
+        
+                \noindent Il contratto accede al CID della lista e confronta l’hash SHA-256 della VC con la posizione indicata.
+            
+            \subsubsection{Sicurezza e Privacy}
+                \noindent Il meccanismo garantisce:
+                    \begin{itemize}
+                        \item \textbf{Integrità}: la Revocation List è firmata e referenziata tramite hash.
+                        
+                        \item \textbf{Verificabilità pubblica}: chiunque può scaricarla via IPFS.
+                        
+                        \item \textbf{Privacy}: nessun dato personale è esposto, solo l’hash della VC è usato per la verifica.
+                    \end{itemize}
+                
+            \subsubsection{Alternative future: EVOKE}
+                \noindent In scenari ad alta scalabilità, il sistema potrà adottare accumulatori crittografici (eg. Merkle tree o accumulatori RSA) come nel modello \textbf{EVOKE}, per ridurre lo spazio di verifica locale e migliorare le performance su dispositivi IoT.
+                
+        \subsection{Privacy e Selective Disclosure}
+            Il sistema adotta tecniche di \textit{selective disclosure} per minimizzare i dati esposti durante la presentazione delle credenziali. In particolare, viene impiegata la tecnica \textbf{BBS+ Signature}, che consente di derivare sottoprove firmate a partire da una VC completa, mantenendo validità crittografica.
+            L'utente può così presentare selettivamente solo i campi strettamente necessari, proteggendo le altre informazioni contenute nella VC originale, senza bisogno di emettere più credenziali. \\
+            
+            \noindent Questo approccio migliora:
+                \begin{itemize}
+                    \item La \textbf{confidenzialità}, evitando l'esposizione di dati personali on-chain;
+                    
+                    \item La \textbf{non linkabilità}, poiché transazioni distinte non sono correlabili tra loro;
+                    
+                    \item La \textbf{flessibilità}, supportando interazioni multi-identità e selettive in ambienti decentralizzati.
+                \end{itemize}
+
+        \subsection{Compromesso tra sicurezza e costo}
+            L'intero ciclo VC → VP → verifica è progettato per essere scalabile:
+                \begin{itemize}
+                    \item Le \textbf{VC} sono emesse e conservate \textbf{off-chain} nei wallet, con hash referenziati on-chain solo quando necessario.
+                    
+                    \item Le \textbf{Revocation List} sono distribuite tramite IPFS, identificabili attraverso un \textit{CID} firmato e referenziato negli smart contract, evitando congestione e dipendenza da API centrali.
+                    
+                    \item Le \textbf{VP} sono firmate localmente e verificate solo nei punti critici (registrazione, pubblicazione recensione), minimizzando il costo computazionale on-chain.
+                \end{itemize}
+        
+            \noindent In questo modo, si ottiene un equilibrio ottimale tra sicurezza crittografica, protezione dell'identità e sostenibilità tecnica.
+        
+    \section{Gestione dei casi limite}
+        Il sistema è progettato per mantenere coerenza, correttezza e sicurezza anche in presenza di condizioni anomale, errori operativi o utenti inattivi. Questa sezione descrive i principali scenari limite e le strategie previste per gestirli senza compromettere l'integrità del sistema reputazionale.
+
+        \subsection{Utenti inattivi}
+            Gli utenti che non interagiscono con il sistema per lunghi periodi non perdono l'accesso, ma:
+                \begin{itemize}
+                    \item le loro \textbf{VC possono scadere} naturalmente, impedendo operazioni critiche finché non ne viene emessa una nuova;
+                    
+                    \item gli \textbf{NFT non utilizzati} per scrivere recensioni vengono marcati automaticamente come \texttt{expired} dopo 60 giorni;
+                    
+                    \item a ogni NFT scaduto corrisponde una penalità reputazionale automatica (reputazione negativa).
+                \end{itemize}
+    
+        \subsection{VC scadute o revocate}
+            Ogni VC include un campo di scadenza e un indice nella Revocation List.
+            L'azione viene bloccata dal contratto se si verifica almeno una delle seguenti condizioni:
+                \begin{itemize}
+                    \item la data di validità è scaduta;
+                    
+                    \item il bit associato nella Revocation List è impostato a 1.
+                \end{itemize}
+            
+            \noindent In entrambi i casi, l'utente dovrà ottenere una nuova VC valida per proseguire.
+    
+        \subsection{DID revocati o compromessi}
+            Nel caso in cui un utente smarrisca la propria chiave privata o sospetti un furto, può:
+                \begin{enumerate}
+                    \item generare un nuovo DID,
+                    
+                    \item ottenere una nuova VC dal medesimo Issuer,
+                    
+                    \item invalidare quella precedente tramite aggiornamento della Revocation List.
+                \end{enumerate}
+    
+            \noindent Il sistema consente di migrare identità senza esporre dati personali e mantiene coerenza nei circuiti ZKP tramite aggiornamento dei nullifier.
+
+        \subsection{Utente Bannato}
+            Un utente può essere bannato dal sistema in seguito alla rilevazione automatica o manuale di comportamenti fraudolenti, come la pubblicazione di recensioni false, la violazione delle policy di registrazione o l'abuso dei meccanismi reputazionali.
+            Il DID dell'utente viene inserito in una \textit{ban list} consultabile on-chain, impedendogli di:
+                \begin{itemize}
+                    \item pubblicare recensioni;
+                    
+                    \item ricevere incentivi;
+                    
+                    \item modificare o revocare recensioni precedenti.
+                \end{itemize}
+                
+            \noindent Il ban può essere revocato solo tramite una procedura di verifica off-chain condotta da un comitato di validatori.
+    
+    \section{Gestione del compromesso tra pseudo-anonimato e unicità dell'utente}
+        Nel progettare un sistema decentralizzato che tuteli la riservatezza dell'utente ma impedisca abusi come la creazione di identità multiple, è necessario bilanciare due esigenze apparentemente opposte: la \textbf{non tracciabilità delle azioni} e l'\textbf{unicità verificabile dell'identità}. Infatti, l'adozione di identificatori pseudo-anonimi (DID) per separare tra loro le recensioni, se da un lato protegge la privacy dell'utente, dall'altro introduce il rischio di attacchi di tipo \textit{Sybil}, in cui un singolo individuo agisce come molteplici entità per ottenere vantaggi indebiti (incentivi ripetuti, manipolazione reputazionale).
+        Per affrontare questo compromesso, il sistema impiega un'architettura fondata su Verifiable Credentials e Zero-Knowledge Proof, in grado di separare logicamente identità pubbliche e azioni on-chain, mantenendo al contempo la garanzia che ogni utente rappresenti una sola entità logica. \\
+        Per mitigare questo rischio, il sistema prevede l'impiego della seguente strategia:
+        
+        \subsection{Verifiable Credential univoca}
+            Durante la fase di registrazione, ogni utente deve ottenere una \textbf{Verifiable Credential} (VC) firmata da un Issuer affidabile, attestante che ha superato una procedura di identificazione controllata. Questa VC non contiene dati personali, ma è legata crittograficamente a un segreto univoco controllato dall'utente (\textit{nullifier}). Tale VC rappresenta la “radice identitaria” che dimostra che l'utente è registrato una sola volta. A partire da essa, l'utente può generare qualsiasi numero di DID operativi senza perdere la proprietà di unicità logica.
+
+        \subsection{DID multipli, ma dimostrabilmente unificati}
+            Per preservare l'\textbf{unlinkability} tra le interazioni, l'utente può scegliere di utilizzare un DID diverso per ogni azione. Tuttavia, quando necessario (eg. per ricevere premi o partecipare a meccanismi di reputazione), l'utente è tenuto a generare una \textbf{Zero-Knowledge Proof} (ZKP) che attesti il possesso di una VC valida.
+            Questo meccanismo consente di:
+                \begin{itemize}
+                    \item Mantenere DID disaccoppiati nel dominio pubblico;
+                    
+                    \item Garantire che tutte le azioni provengano da un'unica identità logica (anti-Sybil);
+                    
+                    \item Prevenire il rilascio multiplo di premi;
+
+                    \item Proteggere la reputazione senza dover rivelare il contenuto delle recensioni.
+                \end{itemize}
+
+        \subsection{Struttura della ZKP anti-Sybil}
+            Il sistema utilizza un circuito ZKP predefinito (\textit{Semaphore}) per generare una prova non rivelabile contenente:
+                \begin{itemize}
+                    \item \texttt{hash(VC)}: identificativo crittografico della credenziale;
+    
+                    \item \texttt{nullifier}: segreto univoco per prevenire riutilizzi;
+    
+                    \item \texttt{MerkleRoot}: radice di un albero contenente tutti gli utenti registrati.
+                \end{itemize}
+
+            \noindent La verifica viene effettuata on-chain tramite un contratto compatibile con ZK-verification.
+
+        \subsection{Risultato del compromesso}
+            Questa strategia garantisce:
+                \begin{itemize}
+                    \item \textbf{Non linkabilità}: ogni recensione o voto può essere firmato con DID diversi, senza possibilità di tracciamento esterno;
+                    
+                    \item \textbf{Unicità garantita}: ogni utente può dimostrare, quando richiesto, di essere un'entità registrata unica;
+                    
+                    \item \textbf{Resilienza agli attacchi Sybil}: nessun attore può ottenere vantaggi moltiplicando le proprie identità operative.
+                \end{itemize}
+    
+    \section{Smart Contract}
+        Gli smart contract costituiscono il nucleo logico e immutabile del sistema. Tutte le regole di registrazione, validazione, reputazione e pubblicazione delle recensioni sono codificate in modo trasparente e deployate sulla blockchain. Nessuna entità può modificarne il comportamento dopo la pubblicazione.
+
+        \subsection{Funzionalità implementate}
+            I principali contratti intelligenti implementano le seguenti funzionalità:
+                \begin{itemize}
+                    \item \textbf{Registrazione dell'utente:} verifica della VC e del DID tramite challenge crittografica e registrazione nel sistema.
+                    
+                    \item \textbf{Minting dell'NFT:} generazione automatica di NFT come prova d'acquisto alla conferma dell'ordine.
+                
+                    \item \textbf{Pubblicazione della recensione:} verifica dell'NFT e registrazione della recensione firmata. Se entro 60 giorni, viene marcata come “valida” e assegna reputazione positiva.
+                
+                    \item \textbf{Scadenza automatica NFT:} gestione periodica dei token inutilizzati entro il termine. Se scaduti, l'utente riceve reputazione negativa.
+                
+                    \item \textbf{Revoca e modifica recensione:} permette all'utente di revocare o aggiornare il contenuto della recensione, nel rispetto dei vincoli di integrità e storico.
+                
+                    \item \textbf{Calcolo reputazione:} calcola la reputazione di un DID come rapporto tra NFT ricevuti e recensioni pubblicate entro i termini.
+                
+                    \item \textbf{Gestione utenti bannati:} controlla l'esistenza del DID in una ban list consultabile, impedendo azioni non autorizzate.
+                
+                    \item \textbf{Verifica ZKP:} accetta prove a conoscenza zero per dimostrare l'identità o la partecipazione, senza rivelare dati sensibili.
+                \end{itemize}
+
+            \begin{table}[H]
+                \centering
+                \begin{tabular}{|l|p{10cm}|}
+                    \hline
+                    \textbf{Funzione} & \textbf{Descrizione} \\
+                    \hline
+                    \texttt{registerVC} & Verifica autenticità della VC e registra il DID nel sistema \\
+                    \hline
+                    \texttt{mintNFT} & Genera NFT alla conferma di un acquisto valido \\
+                    \hline
+                    \texttt{submitReview} & Registra una recensione se l'NFT è valido; assegna reputazione positiva \\
+                    \hline
+                    \texttt{expireNFT} & Marca automaticamente come “scaduti” gli NFT oltre i 60 giorni; assegna reputazione negativa \\
+                    \hline
+                    \texttt{editReview} & Permette la modifica della recensione da parte dell'autore \\
+                    \hline
+                    \texttt{revokeReview} & Revoca la recensione pubblicata e disabilita l'NFT corrispondente \\
+                    \hline
+                    \texttt{getReputationScore} & Restituisce il punteggio reputazionale di un DID \\
+                    \hline
+                    \texttt{isBanned} & Verifica se il DID è presente nella ban list on-chain \\
+                    \hline
+                    \texttt{verifyZKP} & Verifica una prova a conoscenza zero presentata dall'utente \\
+                    \hline
+                \end{tabular}
+                \caption{Funzionalità implementate negli smart contract}
+            \end{table}
+
+    \section{Validator}
+        I validator sono i nodi della rete blockchain che eseguono la validazione e l'inclusione delle transazioni nei blocchi. Operano secondo il meccanismo di consenso del network (eg. Proof-of-Stake), assicurando che tutte le azioni rilevanti vengano registrate in modo ordinato e immutabile.
+
+        \subsection{Compiti principali}
+            I validator onesti assicurano che ogni transazione conforme al protocollo venga elaborata correttamente, contribuendo alla trasparenza e all'affidabilità del sistema.\\
+            In particolare, essi si occupano di:
+                \begin{itemize}
+                    \item \textbf{Inclusione delle recensioni}: garantiscono che ogni recensione validamente firmata e verificata venga scritta sulla blockchain secondo l'ordine temporale previsto.
+                    
+                    \item \textbf{Registrazione delle modifiche:} ogni operazione di revoca o aggiornamento viene tracciata come evento separato, e i validator assicurano che sia correttamente inclusa in un blocco.
+                    
+                    \item  \textbf{Gestione delle scadenze:} le transazioni automatiche che marcano NFT come \texttt{expired} e aggiornano la reputazione devono essere processate senza ritardi o omissioni.
+
+                    \item \textbf{Verifica di prove ZKP:} i validator processano le transazioni contenenti Zero-Knowledge Proof, garantendo che la validazione delle identità e delle interazioni anonime avvenga correttamente.
+                        
+                    \item \textbf{Conservazione della coerenza temporale:} assicurano che tutte le interazioni (eg. pubblicazione recensione, modifica, scadenza NFT) avvengano in ordine cronologico, evitando manipolazioni strategiche.
+                \end{itemize}
+
+        \subsection{Assunzione di sicurezza}
+            Il modello prevede che una maggioranza onesta di validator partecipi al protocollo. Anche in presenza di minoranze malevoli, la blockchain garantisce:
+                \begin{itemize}
+                    \item Ordine cronologico delle recensioni e delle modifiche;
+                    \item Disponibilità e persistenza dei dati pubblicati;
+                    \item Resistenza alla censura, alla sostituzione di contenuti o all'omissione di eventi validi.
+                \end{itemize}
+        
+    \section{Modulo di Audit}
+        Il sistema prevede un modulo di audit pubblico che consente a utenti, revisori indipendenti o enti di fiducia di verificare la correttezza e la trasparenza delle operazioni registrate sulla piattaforma. Questo modulo agisce da interfaccia di consultazione per i dati on-chain e off-chain referenziati, rendendo possibile un controllo distribuito sull'intero sistema, favorendo un ecosistema verificabile e meritocratico.
+        
+        \subsection{Funzionalità}
+            \begin{itemize}
+                \item \textbf{Consultazione recensioni}: ogni recensione è associata a un identificatore crittografico (hash) e a un NFT. Il modulo permette la consultazione dei contenuti, dei metadati essenziali (data di emissione, autore), dello stato (attiva, modificata, revocata) e dell'esito delle verifiche effettuate in fase di pubblicazione.
+
+                \item \textbf{Tracciamento delle modifiche e revoche}: il sistema mantiene uno storico completo delle versioni di ciascuna recensione. Eventuali modifiche o revoche sono visualizzabili sotto forma di eventi pubblici registrati e l'utente può verificare la validità di ciascuna versione tramite l’hash originale.
+                
+                \item \textbf{Verifica degli NFT:} è possibile ispezionare lo stato di ogni NFT (usato, scaduto) e correlarlo con la pubblicazione della recensione.
+                
+                \item \textbf{Esposizione reputazionale}: la reputazione degli utenti è calcolata automaticamente dal sistema come rapporto tra NFT ricevuti e recensioni pubblicate entro i termini.
+                
+                \item \textbf{Verifica ZKP}: l'utente può dimostrare la propria reputazione in modo anonimo tramite Zero-Knowledge Proof. Il modulo consente di visualizzare la presenza e validità delle prove registrate, senza rivelare l'identità dell'utente.
+                
+                \item \textbf{Monitoraggio anomalie}: il sistema può evidenziare schemi sospetti, come attività automatizzate, voti incrociati o comportamenti strategici non conformi, offrendo strumenti per il monitoraggio comunitario e per il mantenimento dell'equilibrio reputazionale.
+            
+                \item \textbf{Accesso strutturato ai dati}: il modulo espone i dati registrati in formato machine-readable, facilitando analisi statistiche, audit esterni o esportazione verso strumenti di visualizzazione interattiva.
+            \end{itemize}
+
+    \begin{figure}[H]
+        \includesvg[width=1\textwidth]{Images/diagramma_wp2_architettura_nuova.svg}
+        \caption{Diagramma dell'architettura del sistema}
+        \label{fig:architettura}
+    \end{figure}
+    
+    \section{Scelta della blockchain permissionless}
+        Il sistema proposto adotta una blockchain di tipo permissionless per garantire trasparenza, immutabilità e accessibilità pubblica dei dati.
+        Questa scelta architetturale permette di garantire che nessun attore possa alterare, censurare o manipolare i dati registrati, favorendo un ecosistema aperto e meritocratico.
+        Tuttavia, tale scelta implica anche alcune sfide in termini di costi e prestazioni.
+        Per tale motivo, si propone un confronto sintetico tra le due principali opzioni architetturali:
+            \begin{table}[H]
+                \centering
+                \begin{tabular}{|p{3.5cm}|p{4cm}|p{4cm}|}
+                    \hline
+                    \textbf{Criterio} & \textbf{Blockchain permissionless} & \textbf{Blockchain permissioned} \\
+                    \hline
+                    \textbf{Accesso} & Aperto a chiunque, nessuna autorizzazione richiesta & Limitato a nodi autorizzati \\
+                    \hline
+                    \textbf{Decentralizzazione} & Elevata (assenza di trust centralizzato) & Parziale, dipende da chi controlla l'accesso \\
+                    \hline
+                    \textbf{Resistenza alla censura} & Garantita (nessuno può impedire la scrittura di dati validi) & Debole (il consorzio può filtrare o rifiutare) \\
+                    \hline
+                    \textbf{Trasparenza} & Totale, i dati sono pubblici e verificabili da chiunque & Limitata, dipende dal livello di accesso concesso \\
+                    \hline
+                    \textbf{Prestazioni} & Più lente (consenso pubblico) & Più rapide (consenso ottimizzato) \\
+                    \hline
+                    \textbf{Costi} & Costi di transazione più elevati (gas) & Costi più bassi e controllabili \\
+                    \hline
+                    \textbf{Governance} & Distribuita e trasparente & Centralizzata o consortile \\
+                    \hline
+                \end{tabular}
+                \caption{Confronto tra blockchain permissionless e permissioned}
+                \label{tab:blockchain_comparison}
+            \end{table}
+
+        \noindent Alla luce dei requisiti funzionali e di sicurezza analizzati, si ritiene che l'adozione di una rete \textit{permissionless} sia la scelta più coerente per:
+            \begin{itemize}
+                \item Garantire la massima verificabilità pubblica delle recensioni;
+                
+                \item Evitare l'introduzione di autorità centrali di controllo;
+                
+                \item Supportare un sistema di reputazione distribuito e sottoponibile ad audit;
+                
+                \item Ridurre al minimo i presupposti di fiducia.
+            \end{itemize}
+
+        \noindent Eventuali esigenze prestazionali future possono essere soddisfatte tramite layer off-chain o soluzioni di scaling, mantenendo inalterata la natura pubblica e immutabile del registro principale. \\
+        
+        \subsection{Ethereum vs Hyperledger Fabric}
+            Viene di seguito rilasciata una tabella comparativa tra Ethereum e Hyperledger Fabric, al fine di mettere in luce gli aspetti che hanno condotto alla scelta di una blockchain permissionless per questo progetto.
+    
+            \begin{table}[H]
+                \centering
+                \begin{tabular}{|l|p{4cm}|p{4cm}|}
+                \hline
+                \textbf{Parametro} & \textbf{Ethereum (permissionless)} & \textbf{Hyperledger Fabric (permissioned)} \\
+                \hline
+                \textbf{Modello di trust} & Trustless, basato su consenso distribuito (PoS) & Basato su identità note e fidate \\
+                \hline
+                \textbf{Accessibilità} & Aperto a chiunque, adatto a scenari pubblici e community-driven & Limitato a entità registrate (consorzi privati) \\
+                \hline
+                \textbf{Scalabilità} & Scalabilità media & Alta scalabilità grazie al controllo su accessi e consenso \\
+                \hline
+                \textbf{Governance} & Decentralizzata, gestita dalla community e dagli stakeholder di Ethereum & Centralizzata o consorziata, con meccanismi privati di aggiornamento \\
+                \hline
+                \textbf{Censura} & Censura-resistente, ogni transazione è registrata pubblicamente & Possibile censura o controllo delle transazioni da parte degli admin \\
+                \hline
+                \textbf{Auditabilità} & Pubblica, trasparente, verificabile da chiunque & Audit interna, limitata ai membri autorizzati \\
+                \hline
+                \textbf{Costo transazioni} & Gas fee variabile & Costi trascurabili, ottimizzato per ambienti enterprise \\
+                \hline
+                \textbf{Adatto per} & Sistemi pubblici, e-commerce, reputazione e incentivazione aperta & Applicazioni interaziendali, supply chain, settori regolamentati \\
+                \hline
+                \end{tabular}
+                \caption{Confronto tra Ethereum e Hyperledger Fabric}
+            \end{table}
+
+        \subsection{Innovazioni future}
+            In uno sviluppo futuro, l'adozione di soluzioni Layer 2 per il rollup (come zkSync o Arbitrum) potrebbe ridurre i costi di transazione e migliorare la scalabilità, mantenendo l'integrità e la trasparenza del sistema Ethereum.
+
+    \section{Utilizzo per l'utente (dApp)}
+        Per rendere il sistema utilizzabile anche da utenti non tecnici, è prevista una piattaforma web decentralizzata (dApp) che funge da interfaccia intuitiva per tutte le operazioni previste, le cui caratteristiche principali sono:
+            \begin{itemize}
+                \item \textbf{Integrazione con wallet:} supporto per MetaMask con estensioni per la gestione di VC e firme ZKP.
+                
+                \item \textbf{Interfacce grafiche guidate (GUI)}: la dApp fornisce interazioni semplificate per:
+                    \begin{itemize}
+                        \item generazione del DID;
+    
+                        \item richiesta e caricamento VC;
+                        
+                        \item caricamento della recensione con upload automatico su IPFS;
+                        
+                        \item gestione e consultazione della reputazione.
+                    \end{itemize}
+    
+                \item \textbf{Gestione errori}: feedback chiari in caso di VC scaduta, DID non valido o NFT scaduto/usato.
+                
+                \item \textbf{Notifiche off-chain}: aggiornamenti via email o notifiche browser su scadenze NFT, stato della VC, ricezione incentivi.
+            \end{itemize}
+
+    \section{Formalismi matematici crittografici}
+        \subsection{Generazione DID}
+            Un DID assume la forma: \texttt{did:ethr:0xABC123...}. \\
+            È creato localmente tramite generazione di una coppia chiave pubblica/privata \((pk, sk)\) e registrazione su un resolver Ethereum compatibile.
+
+        \subsection{Firma digitale}
+            Ogni messaggio $m$ è firmato localmente tramite:
+                \[ \sigma = Sign_{sk}(m) \]
+            
+            La verifica avviene tramite:
+                \[ Verify_{pk}(m, \sigma) = \text{true} \]
+
+        \subsection{Verifiable Credential (VC)}
+            Una VC è un JSON strutturato contenente:
+                \begin{itemize}
+                    \item \texttt{credentialSubject.id = did:ethr:...}
+                    
+                    \item \texttt{Issuer = did:ethr:0xBEEF1234...}
+                    
+                    \item \texttt{proof.signature =} $\mathrm{Sign}_{sk_{Issuer}}(VC)$
+                \end{itemize}
+
+        \subsection{Verifiable Presentation (VP)}
+            Contiene una VC più una firma:
+                \[ \sigma_{VP} = Sign_{sk_{user}}(\text{challenge} \parallel hash(VC)) \]
+            
+            Verificabile via:
+                \[ Verify_{pk_{user}}(\text{challenge} \parallel hash(VC), \sigma_{VP}) = \text{true} \]
+        
+        \subsection{Revoca con bitstring}
+            Ogni VC contiene un \texttt{revocationIndex}. L'Issuer mantiene una bitstring pubblica:
+                \[ RevocationList[revocationIndex] = 1 \Rightarrow VC \text{ revocata} \]
+            
+            Verificabile pubblicamente da chiunque.
+
+        \subsection{Zero-Knowledge Proof (ZKP)}
+            L'utente può generare una prova non rivelabile di possesso di una VC valida, senza esporre il contenuto o il proprio DID.
+            Il circuito predefinito (\textit{Semaphore}) utilizza i seguenti elementi:
+                \begin{itemize}
+                    \item \texttt{hash(VC)}: hash della credenziale usata;
+                    
+                    \item \texttt{nullifier}: segreto univoco per impedire il riutilizzo della prova;
+                    
+                    \item \texttt{MerkleRoot}: radice dell'albero delle identità registrate.
+                \end{itemize}
+            
+            La prova generata è:
+                \[ \pi = \text{ZK-Proof}(hash(VC), \text{nullifier}, \text{Merkle root}) \]
+            
+            Verificabile via:
+                \[ \text{Verify}_{ZK}(\pi) = \text{true} \]
+
+        \subsection{Selective Disclosure con BBS+}
+            Per garantire la minimizzazione dei dati esposti, il sistema adotta le firme \textbf{BBS+}, che permettono all'utente di selezionare un sottoinsieme dei dati contenuti nella VC e firmarli mantenendo validità crittografica. \\
+            
+            Data una credenziale firmata:
+                \[ \text{VC} = \{claim_1, claim_2, ..., claim_n\} \]
+            
+            L'utente può presentare:
+                \[ \text{Proof}_{BBS+} = \text{Sign}_{sk}(subset(\text{VC})) \]
+            
+            Tale sottoprova è verificabile senza accesso all'intera VC:
+                \[ \text{Verify}_{pk}(subset(\text{VC}), \text{Proof}_{BBS+}) = \text{true} \]
+        
+    \section{Conclusione}
+        Il sistema progettato nel presente WP2 rappresenta una soluzione completa e coerente rispetto al modello individuato nel WP1, capace di affrontare le criticità più rilevanti dei sistemi di recensioni centralizzati nel contesto dell’e-commerce. La progettazione tiene conto della necessità di garantire l'autenticità delle recensioni, la verifica dell'effettivo utilizzo del servizio, l'integrità dei dati, la confidenzialità degli utenti e la trasparenza delle regole applicate. \\
+        L'adozione di una blockchain permissionless consente di registrare in modo immutabile e pubblico le recensioni e tutte le operazioni critiche correlate, eliminando la necessità di una fiducia centralizzata. L'uso di NFT soulbound come prova di acquisto e Verifiable Credentials come attestati d'identità verificata garantisce la legittimità delle recensioni, prevenendo spam e falsi utenti. Inoltre, l'implementazione di tecniche a conoscenza zero (ZKP) permette di costruire una reputazione verificabile, senza compromettere l'anonimato degli utenti. \\
+        Ogni componente del sistema (smart contract, verificatori, moduli di audit) è pensato per essere trasparente, verificabile e resistente alla manipolazione. Le scelte architetturali (on-chain per le prove e i diritti, off-chain per i dati sensibili) permettono un'elevata sicurezza senza sacrificare prestazioni e scalabilità.

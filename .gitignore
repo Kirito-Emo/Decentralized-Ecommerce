@@ -1,0 +1,14 @@
+# Files/directories to be ignored - Project under Apache-2.0 License
+# Copyright 2025 Emanuele Relmi
+/.idea/
+/my-app/
+/code/artifacts/
+/code/cache/
+/code/setup.bash
+/code/package-lock.json
+/code/node_modules/
+/code/frontend/src/abi/
+/code/frontend/package-lock.json
+/code/frontend/node_modules/
+/code/backend/package-lock.json
+/code/backend/node_modules/
