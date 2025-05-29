@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Part of this file was generated with [snarkJS](https://github.com/iden3/snarkjs).
+// questa è la chiave di verifica per il circuito Semaphore
+
 pragma solidity ^0.8.20;
 
 import {MAX_DEPTH} from "./Constants.sol";

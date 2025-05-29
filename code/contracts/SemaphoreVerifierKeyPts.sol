@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Part of this file was generated with [snarkJS](https://github.com/iden3/snarkjs).
+//questo codice serve per settare la chiave di verifica per il circuito Semaphore sulla curva ellittica
 pragma solidity ^0.8.20;
 
 library SemaphoreVerifierKeyPts {
