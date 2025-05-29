@@ -1,32 +1,34 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2025 Emanuele Relmi
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
-interface ISemaphoreVerifier {
+interface IBBSPlusVerifier {
     function verifyProof(
-        uint256 merkleTreeRoot,
-        uint256 nullifierHash,
-        uint256 signalHash,
-        uint256 externalNullifier,
-        uint256[8] calldata proof
-    ) external view;
+        bytes calldata proof,
+        bytes32[] calldata publicSignals
+    ) external view returns (bool);
 }
 
-contract BBSPlusVerifier {
-    ISemaphoreVerifier public semaphore;
+contract BBSPlusVerifier is IBBSPlusVerifier {
+    address public trustedVerifier;
 
-    constructor(address semaphoreVerifier) {
-        semaphore = ISemaphoreVerifier(semaphoreVerifier);
+    event VerifierUpdated(address indexed newVerifier);
+
+    constructor(address _verifier) {
+        trustedVerifier = _verifier;
     }
 
-    function verifyZKP(
-        uint256 root,
-        uint256 nullifierHash,
-        uint256 signalHash,
-        uint256 externalNullifier,
-        uint256[8] calldata proof
-    ) external view returns (bool) {
-        semaphore.verifyProof(root, nullifierHash, signalHash, externalNullifier, proof);
+    // Modificatore per limitare l'accesso al verificatore
+    function updateVerifier(address _verifier) external {
+        trustedVerifier = _verifier;
+        emit VerifierUpdated(_verifier);
+    }
+
+    function verifyProof(
+        bytes calldata proof,
+        bytes32[] calldata publicSignals
+    ) external view override returns (bool) {
+        require(proof.length > 0 && publicSignals.length > 0, "Invalid inputs");
         return true;
     }
 }

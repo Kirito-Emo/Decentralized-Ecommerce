@@ -1,17 +1,28 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2025 Emanuele Relmi
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 contract RevocationRegistry {
-    mapping(string => bool) public revoked;
-    event Revoked(string indexed cidOrId);
+    string public revocationListCID;
+    address public issuer;
 
-    function revoke(string memory cidOrId) public {
-        revoked[cidOrId] = true;
-        emit Revoked(cidOrId);
+    event RevocationListUpdated(string newCID);
+
+    modifier onlyIssuer() {
+        require(msg.sender == issuer, "Not issuer");
+        _;
     }
 
-    function isRevoked(string memory cidOrId) public view returns (bool) {
-        return revoked[cidOrId];
+    constructor(address _issuer) {
+        issuer = _issuer;
+    }
+
+    function updateRevocationList(string calldata newCID) external onlyIssuer {
+        revocationListCID = newCID;
+        emit RevocationListUpdated(newCID);
+    }
+
+    function getRevocationCID() external view returns (string memory) {
+        return revocationListCID;
     }
 }
