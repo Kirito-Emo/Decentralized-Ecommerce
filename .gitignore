@@ -7,8 +7,11 @@
 /code/setup.bash
 /code/package-lock.json
 /code/node_modules/
-/code/frontend/src/abi/
 /code/frontend/package-lock.json
+/code/frontend/.env.local
 /code/frontend/node_modules/
-/code/backend/package-lock.json
-/code/backend/node_modules/
+/code/backend/.env
+/code/backend/sp-private.key
+/code/backend/sp-public.crt
+/code/backend/cert.b64
+/code/backend/key.b64

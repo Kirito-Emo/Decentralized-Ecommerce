@@ -84,6 +84,11 @@ This project includes third-party software:
 
   - [Semaphore Protocol (MIT License)](https://github.com/semaphore-protocol/semaphore)
 
+The files used are:
+  - `code/contracts/SemaphoreVerifier.sol`
+  - `code/contracts/SemaphoreVerifierKeyPts.sol`
+  - `code/contracts/Contract.sol`
+
 These components are distributed under their respective licenses and
 are not covered by the Apache License 2.0 that governs this project
 

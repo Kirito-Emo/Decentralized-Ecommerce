@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2025 Emanuele Relmi
-// EthereumScene.tsx - nodo toroidale wireframe in stile cyberpunk
+// Scene.tsx - nodo toroidale wireframe in stile cyberpunk
 
 import { useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
@@ -27,7 +27,7 @@ function Cyberform() {
   );
 }
 
-export default function EthereumScene() {
+export default function Scene() {
   return (
     <div className="fixed top-0 left-0 w-full h-full z-0 pointer-events-none">
       <Canvas camera={{ position: [0, 0, 6], fov: 45 }}>

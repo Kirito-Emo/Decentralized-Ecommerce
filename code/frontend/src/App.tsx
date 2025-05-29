@@ -2,8 +2,9 @@
 // Copyright 2025 Emanuele Relmi
 // App.tsx
 
-import ReviewDApp from "./ReviewDApp"
+import React from "react";
+import ReviewDApp from "./ReviewDApp";
 
 export default function App() {
-  return <ReviewDApp />
+  return <ReviewDApp />;
 }
