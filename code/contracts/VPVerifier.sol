@@ -26,7 +26,7 @@ contract VPVerifier is IVPVerifier {
     function verifyProof(
         bytes calldata proof,
         bytes32[] calldata publicSignals
-    ) external view override returns (bool) {
+    ) external pure override returns (bool) {
         require(proof.length > 0 && publicSignals.length > 0, "Invalid inputs");
         return true;
     }

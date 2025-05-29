@@ -2,14 +2,14 @@
 // Copyright 2025 Emanuele Relmi
 pragma solidity ^0.8.20;
 
-interface IBBSPlusVerifier {
+interface IBBSVerifier {
     function verifyProof(
         bytes calldata proof,
         bytes32[] calldata publicSignals
     ) external view returns (bool);
 }
 
-contract BBSPlusVerifier is IBBSPlusVerifier {
+contract BBSVerifier is IBBSVerifier {
     address public trustedVerifier;
 
     event VerifierUpdated(address indexed newVerifier);
@@ -24,10 +24,11 @@ contract BBSPlusVerifier is IBBSPlusVerifier {
         emit VerifierUpdated(_verifier);
     }
 
+    // Funzione per verificare la prova BBS+
     function verifyProof(
         bytes calldata proof,
         bytes32[] calldata publicSignals
-    ) external view override returns (bool) {
+    ) external pure override returns (bool) {
         require(proof.length > 0 && publicSignals.length > 0, "Invalid inputs");
         return true;
     }

@@ -7,7 +7,7 @@ import "./BadgeNFT.sol";
 import "./ReviewStorage.sol";
 import "./VCRegistry.sol";
 import "./VPVerifier.sol";
-import "./BBS+Verifier.sol";
+import "./BBSVerifier.sol";
 import "./SemaphoreVerifier.sol";
 
 contract ReviewManager {
@@ -16,7 +16,7 @@ contract ReviewManager {
     ReviewStorage public reviewStorage;
     VCRegistry public vcRegistry;
     VPVerifier public vpVerifier;
-    BBSPlusVerifier public bbsVerifier;
+    BBSVerifier public bbsVerifier;
     SemaphoreVerifier public semaphoreVerifier;
 
     uint256 public cooldownTime = 1 days;
@@ -44,7 +44,7 @@ contract ReviewManager {
         reviewStorage = ReviewStorage(_reviewStorage);
         vcRegistry = VCRegistry(_vcRegistry);
         vpVerifier = VPVerifier(_vpVerifier);
-        bbsVerifier = BBSPlusVerifier(_bbsVerifier);
+        bbsVerifier = BBSVerifier(_bbsVerifier);
         semaphoreVerifier = SemaphoreVerifier(_semaphoreVerifier);
     }
 
@@ -91,15 +91,25 @@ contract ReviewManager {
         emit UserBanned(user);
     }
 
+    // Function to verify ZKP or BBS+ proofs
     function verifyZKP(bytes calldata proof, bytes32[] calldata publicSignals, string memory protocol) external view returns (bool) {
         if (keccak256(abi.encodePacked(protocol)) == keccak256("vp")) {
             return vpVerifier.verifyProof(proof, publicSignals);
         } else if (keccak256(abi.encodePacked(protocol)) == keccak256("bbs")) {
             return bbsVerifier.verifyProof(proof, publicSignals);
-        } else if (keccak256(abi.encodePacked(protocol)) == keccak256("semaphore")) {
-            return semaphoreVerifier.verifyProof(proof, publicSignals);
         } else {
             revert("ZKP protocol not supported");
         }
+    }
+
+    // Function to verify Semaphore proofs
+    function verifySemaphoreProof(
+        uint[2] calldata _pA,
+        uint[2][2] calldata _pB,
+        uint[2] calldata _pC,
+        uint[4] calldata _publicSignals,
+        uint merkleTreeDepth
+    ) external view returns (bool) {
+        return semaphoreVerifier.verifyProof(_pA, _pB, _pC, _publicSignals, merkleTreeDepth);
     }
 }
