@@ -4,7 +4,6 @@
 /my-app/
 /code/artifacts/
 /code/cache/
-/code/setup.bash
 /code/package-lock.json
 /code/node_modules/
 /code/frontend/package-lock.json
