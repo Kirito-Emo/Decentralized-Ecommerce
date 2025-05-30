@@ -9,8 +9,9 @@ import "./VCRegistry.sol";
 import "./VPVerifier.sol";
 import "./BBSVerifier.sol";
 import "./SemaphoreVerifier.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract ReviewManager {
+contract ReviewManager is AccessControl {
     ReviewNFT public reviewNFT;
     BadgeNFT public badgeNFT;
     ReviewStorage public reviewStorage;
@@ -24,6 +25,8 @@ contract ReviewManager {
     mapping(address => bool) public isBanned;
     mapping(uint256 => uint256) public lastEdit;
     mapping(address => uint256) public reputation;
+
+    bytes32 public constant MODERATOR_ROLE = keccak256("MODERATOR_ROLE");
 
     event ReviewSubmitted(address indexed user, uint256 indexed tokenId, uint256 reviewId);
     event ReviewEdited(uint256 indexed reviewId, string newCID);
@@ -39,6 +42,9 @@ contract ReviewManager {
         address _bbsVerifier,
         address _semaphoreVerifier
     ) {
+        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _setupRole(MODERATOR_ROLE, msg.sender);
+
         reviewNFT = ReviewNFT(_reviewNFT);
         badgeNFT = BadgeNFT(_badgeNFT);
         reviewStorage = ReviewStorage(_reviewStorage);
@@ -86,12 +92,11 @@ contract ReviewManager {
         return reputation[user];
     }
 
-    function banUser(address user) external {
+    function banUser(address user) external onlyRole(MODERATOR_ROLE) {
         isBanned[user] = true;
         emit UserBanned(user);
     }
 
-    // Function to verify ZKP or BBS+ proofs
     function verifyZKP(bytes calldata proof, bytes32[] calldata publicSignals, string memory protocol) external view returns (bool) {
         if (keccak256(abi.encodePacked(protocol)) == keccak256("vp")) {
             return vpVerifier.verifyProof(proof, publicSignals);
@@ -102,7 +107,6 @@ contract ReviewManager {
         }
     }
 
-    // Function to verify Semaphore proofs
     function verifySemaphoreProof(
         uint[2] calldata _pA,
         uint[2][2] calldata _pB,

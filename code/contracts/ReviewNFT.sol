@@ -51,6 +51,7 @@ contract ReviewNFT is ERC721URIStorage, Ownable {
         emit NFTUsed(tokenId);
     }
 
+    // This function should be triggered regularly by an off-chain scheduler to mark expired NFTs
     function expireNFTs(uint256[] calldata tokenIds) external {
         for (uint i = 0; i < tokenIds.length; i++) {
             uint256 tokenId = tokenIds[i];

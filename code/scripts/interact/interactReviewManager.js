@@ -29,6 +29,7 @@ async function main() {
 
     const reviewNFT = await ethers.getContractAt("ReviewNFT", addresses.ReviewNFT);
     const manager = await ethers.getContractAt("ReviewManager", addresses.ReviewManager);
+    const storage = await ethers.getContractAt("ReviewStorage", addresses.ReviewStorage);
 
     console.log("👤 User:", user.address);
 
@@ -37,7 +38,7 @@ async function main() {
     await mintTx.wait();
     console.log("✅ NFT minted");
 
-    // Upload prima review
+    // Upload first review
     const originalPath = path.join(__dirname, "review.txt");
     if (!fs.existsSync(originalPath)) {
         fs.writeFileSync(originalPath, "Original review on IPFS.");
@@ -59,36 +60,36 @@ async function main() {
     const reviewId = reviewEvent.args.reviewId;
     console.log("📝 Review sent with ID: ", reviewId.toString());
 
-    // Upload 2nd review
+    // Upload second review (modified)
     const modPath = path.join(__dirname, "review_modificata.txt");
     fs.writeFileSync(modPath, "Modified review on IPFS.");
     const cid2 = await uploadToIPFS(modPath);
 
-    // Review modified
+    // Edit review
     const txEdit = await manager.editReview(reviewId, `ipfs://${cid2}`);
     await txEdit.wait();
     console.log("✏️ Review modified.");
 
-    // Review revoked
+    // Revoke review
     const txRevoke = await manager.revokeReview(reviewId);
     await txRevoke.wait();
     console.log("❌ Review revoked.");
 
-    // Reputation
+    // Check reputation
     const rep = await manager.getReputation(user.address);
     console.log("🏅 Reputation: ", rep.toString());
 
-    // ZKP VP
+    // Test ZKP VP
     const proof = "0x1234";
     const signals = ["0xaaaa", "0xbbbb"];
     const vpCheck = await manager.verifyZKP(proof, signals, "vp");
     console.log("🔐 VP Proof valid?", vpCheck);
 
-    // ZKP BBS
+    // Test ZKP BBS+
     const bbsCheck = await manager.verifyZKP(proof, signals, "bbs");
     console.log("🔐 BBS+ Proof valid?", bbsCheck);
 
-    // ZKP Semaphore
+    // Test ZKP Semaphore
     const pA = [1, 2];
     const pB = [[3, 4], [5, 6]];
     const pC = [7, 8];
@@ -97,10 +98,14 @@ async function main() {
     const semaCheck = await manager.verifySemaphoreProof(pA, pB, pC, pubSignals, depth);
     console.log("🔐 Semaphore Proof valid?", semaCheck);
 
-    // Ban user test
+    // Ban user
     await manager.banUser(other.address);
     const isBanned = await manager.isBanned(other.address);
     console.log("🚫 User banned!", isBanned);
+
+    // Retrieve all review IDs by user
+    const userReviews = await storage.getReviewsByAuthor(user.address);
+    console.log("📚 Review IDs by user:", userReviews.map(id => id.toString()));
 }
 
 main().catch(console.error);
