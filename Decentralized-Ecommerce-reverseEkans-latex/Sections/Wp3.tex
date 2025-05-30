@@ -1,15 +1,648 @@
-% Copyright 2025 Emanuele Relmi
-%
-% Licensed under the Apache License, Version 2.0 (the "License");
-% you may not use this file except in compliance with the License.
-% You may obtain a copy of the License at
-%
-%     http://www.apache.org/licenses/LICENSE-2.0
-%
-% Unless required by applicable law or agreed to in writing, software
-% distributed under the License is distributed on an "AS IS" BASIS,
-% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-% See the License for the specific language governing permissions and
-% limitations under the License.
-
 \chapter{WORK PACKAGE 3}
+    In questo capitolo viene analizzata la soluzione progettuale descritta nel WP2, verificando in che misura soddisfa le proprietà desiderate individuate nel WP1. L'analisi è articolata in sei sezioni, ognuna corrispondente a una proprietà fondamentale: confidenzialità, privacy, integrità, trasparenza, efficienza e completezza.
+    Per ciascuna proprietà, saranno evidenziate le scelte architetturali e le contromisure adottate, valutandone l'efficacia in riferimento al modello di minaccia definito nel WP1.
+
+    \section{Confidenzialità}
+        \subsection{C1 – Protezione dell'identità reale nelle recensioni}
+            \noindent \textbf{Descrizione}
+                Il sistema deve assicurare che l'identità reale dell'utente non venga mai associata, in modo diretto o indiretto, alle recensioni che pubblica. Ogni partecipazione avviene tramite un'identità digitale pseudo-anonima (DID), priva di riferimenti espliciti alla persona fisica. Solo in casi eccezionali e ben regolati, ad esempio su richiesta legale, può essere possibile risalire al soggetto che ha prodotto una recensione. Questo livello di riservatezza è fondamentale per tutelare la libertà di espressione e prevenire ritorsioni o condizionamenti esterni. \\
+    
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Identity Thief:} tenta di violare wallet o sottrarre Verifiable Credentials per scoprire l'identità reale associata a un DID, oppure per agire a nome dell'utente e produrre recensioni non autorizzate.
+                    
+                    \item \textbf{Analista comportamentale (Data Correlator):} usa tecniche di fingerprinting o analisi temporale su metadati pubblici per ipotizzare correlazioni tra DID diversi e ricostruire l'identità dell'utente.
+                    
+                    \item \textbf{Issuer compromesso:} un ente certificatore corrotto può rilasciare VC con caratteristiche non univoche e tracciabili, violando il principio di anonimato.
+                    
+                    \item \textbf{Attaccante malware o phishing:} ottiene accesso diretto al dispositivo dell'utente o alla sua chiave privata, permettendo il tracciamento completo delle attività firmate.
+                \end{itemize}
+    
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{DID generati localmente:} ogni utente genera autonomamente il proprio identificatore e la chiave privata associata, senza dipendere da registri nominativi.
+                    
+                    \item \textbf{Separazione tra identità reale e on-chain:} l'identità reale è verificata solo off-chain tramite SPID o CIE, ma non viene mai esposta sulla blockchain.
+                    
+                    \item \textbf{Selective Disclosure con BBS+:} l'utente presenta solo i dati minimi indispensabili, firmati crittograficamente, evitando esposizione inutile.
+                    
+                    \item \textbf{VC conservata off-chain:} la credenziale rimane nel wallet dell'utente, on-chain è registrato solo il suo hash.
+                    
+                    \item \textbf{Meccanismo di revoca:} in caso di compromissione, l'utente può revocare la VC e sostituirla con una nuova, mantenendo il controllo sul proprio profilo.
+                    
+                    \item \textbf{ZKP per la reputazione:} l'utente può dimostrare la propria identità logica o la reputazione senza rivelare alcun legame tra le recensioni pubblicate.
+                \end{itemize}
+
+        \subsection{C2 – Comunicazioni cifrate tra client e piattaforma}
+            \noindent \textbf{Descrizione}
+                Tutte le comunicazioni tra l'utente e il sistema, in particolare quelle legate alla verifica dell'acquisto, al rilascio di credenziali e alla pubblicazione di recensioni, devono avvenire su canali sicuri e cifrati. È essenziale impedire che informazioni sensibili (come token, firme digitali o contenuti delle recensioni) vengano intercettate, alterate o riutilizzate da attaccanti, anche quando viaggiano su reti non affidabili. \\
+    
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Attaccante passivo di rete:} intercetta pacchetti in transito su canali insicuri (eg. HTTP), nel tentativo di ottenere credenziali, firme o altri dati sensibili. Può riutilizzare una Verifiable Presentation per attuare attacchi di replay.
+                    
+                    \item \textbf{Attaccante phishing/malware:} può intercettare dati tramite malware installato localmente (eg. keylogger, clipboard hijack), ottenendo accesso a contenuti prima che vengano cifrati.
+                    
+                    \item \textbf{Issuer compromesso:} un issuer malevolo potrebbe indurre l'utente a comunicare in chiaro o utilizzare protocolli non sicuri per la trasmissione della VC.
+                \end{itemize}
+    
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{Crittografia TLS:} ogni interazione client-server avviene tramite HTTPS con certificati validi, impedendo l'intercettazione dei dati in transito.
+                    
+                    \item \textbf{Crittografia end-to-end:} in scenari critici (eg. invio della VP), le informazioni vengono firmate e cifrate anche a livello applicativo, proteggendo il contenuto a prescindere dal canale usato.
+                    
+                    \item \textbf{Uso di challenge e nonce:} per prevenire replay attack, ogni Verifiable Presentation include una challenge univoca firmata, che rende inutilizzabile ogni replay.
+                    
+                    \item \textbf{Hash e CID invece di contenuto diretto:} il contenuto delle recensioni e delle credenziali è archiviato off-chain e identificato solo tramite hash, limitando l'impatto di eventuali intercettazioni.
+                    
+                    \item \textbf{Verifica VC lato smart contract:} ogni credenziale presentata viene verificata sulla chain solo se firmata da issuer affidabili, minimizzando il rischio derivante da issuer corrotti.
+                \end{itemize}
+
+        \subsection{C3 – Minimizzazione dei metadati esposti}
+            \noindent \textbf{Descrizione}
+                Il sistema deve ridurre al minimo la quantità di metadati visibili pubblicamente (eg. timestamp precisi, indirizzi IP, pattern di comportamento), per limitare la possibilità che un osservatore esterno possa trarre conclusioni sull'identità o sulle abitudini di un utente. La visibilità di tali dati rappresenta una potenziale minaccia alla privacy, anche in assenza di dati esplicitamente personali. \\
+    
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Analista comportamentale (Data Correlator):} osserva l'attività pubblica sulla blockchain e su IPFS per identificare schemi temporali, occorrenze o fingerprint comportamentali, con l'obiettivo di associare azioni a identità.
+    
+                    \item \textbf{Attaccante passivo di rete:} può monitorare i pacchetti trasmessi e raccogliere metadati (frequenza, orari, contenuti ricorrenti) da cui derivare profili utente.
+    
+                    \item \textbf{Attaccante malware:} se installato localmente, può osservare i pattern di utilizzo (eg. orari di firma, frequenza delle transazioni) anche senza accedere direttamente alle chiavi.
+                \end{itemize}
+    
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{Uso di DID rotabili:} ogni interazione può essere firmata da un DID diverso, rendendo difficile correlare più azioni a uno stesso utente.
+    
+                    \item \textbf{Timestamp offuscati:} i timestamp visibili sulla blockchain sono limitati alla granularità necessaria (eg. giorno, non ora), riducendo il valore delle analisi temporali.
+    
+                    \item \textbf{Contenuti su IPFS con hash:} le recensioni e le VC sono archiviate off-chain e referenziate tramite hash, rendendo impossibile l'ispezione dei dati senza accesso diretto.
+    
+                    \item \textbf{Selective Disclosure:} solo i dati strettamente necessari vengono presentati nei messaggi firmati, evitando l'inclusione di informazioni aggiuntive non richieste.
+    
+                    \item \textbf{No log su piattaforma:} la piattaforma e-commerce non registra né archivia metadati sensibili localmente, tutte le transazioni sensibili avvengono lato blockchain o wallet.
+                \end{itemize}
+    
+        \subsection{C4 – Isolamento tra attività dell'utente}
+            \noindent \textbf{Descrizione}
+                Le attività svolte dallo stesso utente nel tempo (eg. pubblicazione di più recensioni) non devono poter essere facilmente correlate tra loro, a meno che l'utente non scelga esplicitamente di farlo. Questa proprietà protegge l'utente da ricostruzioni cronologiche o aggregazioni di attività che potrebbero compromettere la sua privacy. \\
+    
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Analista comportamentale (Data Correlator):} tenta di associare più recensioni tra loro in base a pattern temporali o contenutistici, per dedurre identità univoche.
+    
+                    \item \textbf{Attaccante passivo di rete:} osserva la sequenza e la periodicità delle transazioni per ricostruire l'identità comportamentale di un utente.
+    
+                    \item \textbf{Identity Thief o Issuer malevolo:} potrebbe creare VC con tratti identificativi costanti, facilitando l'identificazione delle attività connesse.
+                \end{itemize}
+    
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{Impiego di DID disaccoppiati:} l'utente può firmare ogni recensione con un DID diverso, non riconducibile agli altri, riducendo la linkabilità.
+    
+                    \item \textbf{Zero-Knowledge Proof:} l'utente può dimostrare di essere l'autore di più recensioni (eg. per ottenere reputazione aggregata) senza svelare i singoli legami.
+    
+                    \item \textbf{Revisione crittografica delle VC:} le VC vengono firmate senza includere elementi fissi tracciabili, e il loro contenuto è referenziato via hash.
+    
+                    \item \textbf{Cooldown e anti-spam:} l'intervallo minimo tra due recensioni successive (24h) riduce la possibilità che un pattern temporale diventi un identificatore implicito.
+    
+                    \item \textbf{Nessun tracciamento server-side:} la piattaforma non registra sessioni utente o pattern di navigazione, impedendo correlazioni fuori dalla blockchain.
+                \end{itemize}
+
+    \section{Privacy}
+        \subsection{P1 – Minimizzazione dei dati}
+            \noindent \textbf{Descrizione}
+                Ogni transazione deve includere solo le informazioni strettamente necessarie all'azione richiesta. Il sistema deve evitare la trasmissione o pubblicazione di dati personali, dettagli d'acquisto non essenziali o altri elementi che potrebbero compromettere l'anonimato o facilitare l'identificazione indiretta dell'utente. \\
+
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Issuer compromesso:} può emettere Verifiable Credentials contenenti attributi inutili o eccessivi, che facilitano il tracciamento o l'identificazione.
+
+                    \item \textbf{Analista comportamentale (Data Correlator):} tenta di sfruttare qualsiasi informazione extra nei dati on-chain o nei metadati IPFS per identificare pattern o correlare identità.
+
+                    \item \textbf{Attaccante passivo di rete:} può osservare il contenuto delle transazioni e raccogliere dettagli ridondanti per costruire profili, anche se non direttamente identificativi.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{Uso di hash e CID:} le recensioni e altri contenuti sono conservati off-chain su IPFS, mentre on-chain viene registrato solo il loro identificatore (hash), evitando esposizione di testo o dati inutili.
+
+                    \item \textbf{Selective Disclosure:} grazie alle firme BBS+, ogni utente può presentare solo i campi rilevanti della propria VC, omettendo qualsiasi informazione non necessaria per l'azione corrente.
+
+                    \item \textbf{Design minimale dei contratti:} gli smart contract non richiedono dati personali né dettagli d'ordine, operano solo su hash, token ID e firme digitali.
+
+                    \item \textbf{Conservazione locale della VC:} la credenziale è mantenuta nel wallet dell'utente, non viene mai trasmessa interamente sulla rete o pubblicata in forma leggibile.
+                \end{itemize}
+
+
+        \subsection{P2 – Verificabilità condizionata (Predicate Disclosure)}
+            \noindent \textbf{Descrizione}
+                Il sistema deve permettere all'utente di dimostrare il possesso dei requisiti necessari per un'azione (eg. diritto a recensire), senza dover rivelare l'intera identità o altri attributi personali non richiesti. Questo approccio preserva la privacy e limita l'esposizione informativa. \\
+
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Issuer compromesso:} potrebbe forzare l'utente a presentare VC complete, imponendo la condivisione di attributi non necessari.
+
+                    \item \textbf{Attaccante passivo di rete:} osserva le credenziali presentate e tenta di ricavare più informazioni di quelle strettamente necessarie.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{Supporto nativo a Predicate Disclosure:} l'utente può dimostrare di avere una VC valida o un diritto specifico senza rivelare l'intero contenuto della credenziale.
+
+                    \item \textbf{Selective disclosure tramite BBS+:} le firme permettono di derivare sottoprove contenenti solo le informazioni minime, senza invalidare la validità crittografica.
+
+                    \item \textbf{Verifica lato smart contract:} il contratto verifica solo la validità della prova parziale, senza accesso ad altri attributi.
+
+                    \item \textbf{Challenge firmata:} ogni presentazione avviene in risposta a una challenge univoca, evitando il riutilizzo della prova o l'accesso non autorizzato ad altri attributi.
+                \end{itemize}
+
+        \subsection{P3 – Non tracciabilità (Unlinkability)}
+            \noindent \textbf{Descrizione}
+                Le recensioni pubblicate da uno stesso utente non devono poter essere collegate tra loro, a meno che egli stesso non decida di renderle aggregabili. Questo impedisce a osservatori esterni di dedurre relazioni o ricostruire una storia delle azioni. \\
+
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Analista comportamentale (Data Correlator):} esamina il contenuto delle recensioni, orari o CID per identificare correlazioni che suggeriscano un'origine comune.
+
+                    \item \textbf{Issuer compromesso:} rilascia VC con elementi statici ricorrenti che permettono di legare presentazioni diverse tra loro.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{DID diversi per ogni recensione:} ogni pubblicazione avviene con un'identità crittografica distinta, priva di legami visibili.
+
+                    \item \textbf{ZKP per reputazione aggregata:} l'utente può dimostrare di avere pubblicato un certo numero di recensioni senza rivelare quali o quando.
+
+                    \item \textbf{Contenuti su IPFS:} le recensioni sono visibili ma non contengono metadati identificativi o riutilizzabili.
+
+                    \item \textbf{VC senza elementi ricorrenti:} le credenziali usano chiavi dinamiche e non includono identificatori persistenti.
+                \end{itemize}
+
+        \subsection{P4 – Non riutilizzabilità (Non-transferability)}
+            \noindent \textbf{Descrizione}
+                Ogni NFT che consente la pubblicazione di una recensione deve essere utilizzabile una sola volta ed esclusivamente dal suo legittimo proprietario. Questo impedisce che il diritto a recensire venga venduto o ceduto a terzi. \\
+
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Reviewer a pagamento:} acquista o riceve NFT da altri utenti per scrivere recensioni false su prodotti non acquistati.
+
+                    \item \textbf{Attaccante Sybil:} tenta di usare più identità per riutilizzare NFT apparentemente validi ma già spesi.
+
+                    \item \textbf{Utente fraudolento:} prova a riutilizzare lo stesso NFT su più DID per aggirare i controlli.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{NFT soulbound:} ogni token è non trasferibile e legato al DID dell'utente che ha effettuato l'acquisto.
+
+                    \item \textbf{Verifica ownership lato smart contract:} al momento della recensione, il contratto controlla che il token appartenga al mittente.
+
+                    \item \textbf{Marcatore reviewUsed:} impedisce che un NFT venga usato più di una volta per pubblicare o modificare una recensione.
+
+                    \item \textbf{Tracciamento stato NFT:} ogni stato (pending, used, expired) è aggiornato on-chain in modo immutabile.
+                \end{itemize}
+
+        \subsection{P5 – Non falsificabilità (Unforgeability)}
+            \noindent \textbf{Descrizione}
+                Ogni azione nel sistema, dalla registrazione dell'utente alla pubblicazione di una recensione, deve essere firmata digitalmente e verificabile crittograficamente. Nessuno può presentare una recensione o una credenziale falsa senza possedere effettivamente i diritti. \\
+
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Utente fraudolento:} tenta di scrivere una recensione senza aver effettuato l'acquisto o falsificando una VC.
+
+                    \item \textbf{Issuer compromesso:} emette VC non legittime che sembrano formalmente valide.
+
+                    \item \textbf{Validator corrotto:} accetta transazioni non firmate correttamente o contenenti credenziali false.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{Firma digitale obbligatoria:} ogni messaggio (VC, VP, recensione) deve essere firmato con la chiave privata.
+
+                    \item \textbf{Verifica crittografica on-chain:} gli smart contract controllano la validità di ogni firma e l'autenticità dell'emittente (Issuer affidabile).
+
+                    \item \textbf{Registro di revoca:} se un Issuer viene compromesso, tutte le VC rilasciate possono essere invalidate tramite bitstring pubblica.
+
+                    \item \textbf{Verifiche multiple incrociate:} l'azione è autorizzata solo se anche l’NFT e la VC corrispondono logicamente.
+                \end{itemize}
+
+        \subsection{P6 – Protezione contro correlazioni (Untraceability)}
+            \noindent \textbf{Descrizione}
+                Il sistema deve impedire che l'osservazione incrociata di più transazioni (eg. registrazione, invio recensione, verifica VC) possa rivelare legami tra identità o azioni dell'utente. \\
+
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Attaccante passivo di rete:} monitora le interazioni tra wallet e smart contract per correlare recensioni a una stessa identità.
+
+                    \item \textbf{Analista comportamentale:} osserva il traffico blockchain e tenta di legare DID a VC sulla base di pattern o metadati comuni.
+
+                    \item \textbf{Issuer malevolo:} inserisce riferimenti statici nelle VC, rendendo possibili correlazioni.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{DID rotabili e disaccoppiati:} ogni interazione utilizza una nuova coppia chiave/DID, priva di riferimenti al precedente.
+
+                    \item \textbf{Use of ZKP:} l'utente può dimostrare la validità delle sue azioni in modo anonimo, senza legarle tra loro.
+
+                    \item \textbf{VC con selective disclosure:} i dati non necessari non vengono mai rivelati, impedendo confronti incrociati.
+
+                    \item \textbf{Hash non riutilizzabili:} ogni interazione on-chain usa identificatori univoci e non riciclabili.
+                \end{itemize}
+
+        \subsection{P7 – Resistenza alla sorveglianza passiva (Unobservability)}
+            \noindent \textbf{Descrizione}
+                Anche osservando costantemente il traffico sulla rete blockchain o IPFS, un attore esterno non deve poter inferire legami tra identità, azioni, contenuti e reputazione dell'utente. \\
+
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Attaccante passivo di rete:} monitora il traffico e cerca di inferire relazioni tra DID, timestamp, CID o contenuti hashati.
+
+                    \item \textbf{Data Correlator:} raccoglie tutti i dati pubblici per creare mappe di reputazione o identità.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{Crittografia end-to-end:} ogni comunicazione tra wallet, smart contract e IPFS è cifrata o firmata.
+
+                    \item \textbf{Uso di CID non correlabili:} ogni contenuto pubblicato su IPFS ha un hash unico, senza informazioni leggibili.
+
+                    \item \textbf{Metadati minimizzati:} le transazioni e i documenti contengono solo l'indispensabile, evitando esposti inutili.
+
+                    \item \textbf{Assenza di logging sulla dApp:} la piattaforma non conserva cronologie utente, IP o fingerprint locali.
+                \end{itemize}
+
+    \section{Integrità}
+        \subsection{I1 – Immutabilità delle recensioni}
+            \noindent \textbf{Descrizione}
+                Una recensione, una volta pubblicata, non deve poter essere modificata o cancellata arbitrariamente. Eventuali aggiornamenti o revoche devono seguire regole prestabilite, e l'intera cronologia deve restare consultabile. \\
+
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Utente fraudolento:} pubblica una recensione positiva, riceve un incentivo, poi la modifica in modo scorretto o rimuove contenuti.
+
+                    \item \textbf{Validator corrotto:} tenta di alterare lo storico delle modifiche o impedire la tracciabilità delle versioni.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{Hash IPFS immutabile:} ogni recensione è referenziata tramite hash univoco, rendendo ogni versione verificabile.
+
+                    \item \textbf{Registro eventi on-chain:} ogni modifica o revoca genera un nuovo evento tracciabile e immutabile sulla blockchain.
+
+                    \item \textbf{Regole codificate negli smart contract:} solo l'autore può modificare/revocare entro limiti specifici (eg. cooldown, una sola modifica).
+
+                    \item \textbf{Audit pubblico:} il sistema mantiene accesso allo storico delle versioni e degli hash precedenti.
+                \end{itemize}
+
+        \subsection{I2 – Verifica dell'acquisto}
+            \noindent \textbf{Descrizione}
+                Solo utenti che hanno realmente acquistato un prodotto possono lasciare una recensione. Tale condizione deve essere verificata crittograficamente, legando la possibilità di recensire a una prova non falsificabile. \\
+
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Reviewer a pagamento:} tenta di recensire prodotti mai acquistati sfruttando NFT rubati o prestati.
+
+                    \item \textbf{Utente fraudolento:} forza il sistema per ottenere NFT senza aver eseguito un acquisto valido.
+
+                    \item \textbf{Issuer malevolo:} rilascia VC o prove di acquisto fasulle.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{NFT non trasferibili:} emessi solo a seguito di un acquisto e associati univocamente al DID dell'utente.
+
+                    \item \textbf{Verifica del token:} gli smart contract controllano che l’NFT sia valido, non scaduto e non usato.
+
+                    \item \textbf{Prove crittografiche dell'acquisto:} ogni NFT contiene hash del prodotto, timestamp e identificativo on-chain.
+
+                    \item \textbf{VC da Issuer affidabile:} l'identità dell'utente è attestata da un'entità verificata che rilascia una sola credenziale per persona.
+                \end{itemize}
+
+        \subsection{I3 – Firma e non ripudio}
+            \noindent \textbf{Descrizione}
+                Ogni recensione deve essere firmata digitalmente, in modo che l'autore non possa negare in seguito di averla pubblicata. Le firme devono garantire autenticità e tracciabilità dell'origine del contenuto. \\
+
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Utente fraudolento:} tenta di negare di aver scritto una recensione negativa o sospetta.
+
+                    \item \textbf{Attaccante malware:} agisce per conto dell'utente cercando di non lasciare tracce verificabili.
+
+                    \item \textbf{Validator corrotto:} pubblica recensioni non firmate, falsificando l'autenticità.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{Firma digitale obbligatoria:} ogni recensione è firmata con la chiave privata del DID che possiede l’NFT.
+
+                    \item \textbf{Verifica integrata nello smart contract:} nessuna transazione è accettata senza firma valida e legata al token corretto.
+
+                    \item \textbf{Accesso autenticato:} ogni operazione richiede challenge firmata, prevenendo spoofing.
+
+                    \item \textbf{Tracciabilità completa degli eventi:} le firme e i riferimenti IPFS permettono verifica e non ripudio a posteriori.
+                \end{itemize}
+
+        \subsection{I4 – Prevenzione delle aggregazioni fraudolente}
+            \noindent \textbf{Descrizione}
+                Il sistema deve impedire che più utenti (o identità fasulle) si coordinino per manipolare artificialmente la reputazione di un contenuto. Nessuno deve poter unire più credenziali o NFT per pubblicare una recensione amplificata. \\
+
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Attaccante Sybil:} crea molte identità per generare recensioni duplicate o moltiplicare l'impatto reputazionale.
+
+                    \item \textbf{Utenti collusi:} tentano di aggregare NFT e VC per far risultare una recensione multipla o sovradimensionata.
+
+                    \item \textbf{Issuer corrotto:} distribuisce credenziali multiple alla stessa persona.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{VC univoca per identità reale:} ogni utente riceve una sola credenziale da un Issuer fidato.
+
+                    \item \textbf{Verifica della singola ownership NFT:} ogni recensione è associata a un solo NFT legato a un solo DID.
+
+                    \item \textbf{ZKP anti-Sybil:} l'utente può dimostrare in forma anonima di essere unico, senza rivelare l'identità.
+
+                    \item \textbf{Mappatura VC → DID one-time:} impedisce di usare la stessa credenziale con più identità operative.
+                \end{itemize}
+
+        \subsection{I5 – Ordine cronologico garantito}
+            \noindent \textbf{Descrizione}
+                Le recensioni devono essere registrate seguendo l'ordine reale di pubblicazione. Nessun attore deve poter alterare, ritardare o censurare le transazioni per manipolare visibilità o reputazione. \\
+
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Validator corrotto:} ritarda o censura recensioni sgradite, inserendole in blocchi successivi o evitando la registrazione.
+
+                    \item \textbf{Utente malevolo:} tenta di forzare l'ordine con timestamp falsi o transazioni simultanee.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{Blockchain permissionless:} ogni transazione è registrata secondo l'ordine di propagazione e consenso pubblico.
+
+                    \item \textbf{Inclusione automatica:} i validator onesti inseriscono le recensioni senza preferenze, seguendo logiche FIFO.
+
+                    \item \textbf{Timestamp derivati dal blocco:} la data di pubblicazione è quella del mining, non del client.
+
+                    \item \textbf{Audit pubblico:} il modulo di verifica consente il controllo della sequenza delle recensioni in modo trasparente.
+                \end{itemize}
+
+    \section{Trasparenza}
+        \subsection{T1 – Algoritmi di visibilità pubblici e immutabili}
+            \noindent \textbf{Descrizione}
+                Gli algoritmi che regolano l'ordinamento e la visibilità delle recensioni devono essere trasparenti, accessibili a tutti e non modificabili in modo arbitrario. Questo garantisce l'equità del sistema e impedisce favoritismi da parte della piattaforma. \\
+
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Piattaforma centralizzata:} può manipolare l'ordine di visualizzazione delle recensioni, oscurando quelle negative o sponsorizzando contenuti specifici.
+
+                    \item \textbf{Validator corrotto:} collabora con la piattaforma per includere selettivamente recensioni favorevoli nei blocchi prioritari.
+
+                    \item \textbf{Attore esterno collusivo:} tenta di influenzare il sistema off-chain per alterare la visibilità apparente.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{Logica di ordinamento on-chain:} gli smart contract gestiscono direttamente la visibilità in base a regole codificate e pubbliche.
+
+                    \item \textbf{Algoritmi non modificabili:} il codice di ordinamento è deployato su blockchain, quindi immutabile dopo la pubblicazione.
+
+                    \item \textbf{Accesso pubblico alla logica:} ogni utente può consultare il funzionamento e verificare che l'ordine non sia arbitrario.
+
+                    \item \textbf{Audit della DApp:} l'interfaccia utente applica i criteri di ordinamento definiti on-chain senza alterazioni locali.
+                \end{itemize}
+
+        \subsection{T2 – Accesso pubblico alle transazioni}
+            \noindent \textbf{Descrizione}
+                Tutte le transazioni significative (pubblicazione, modifica, revoca di recensioni) devono essere pubblicamente consultabili. Questo garantisce tracciabilità, verifica diffusa e previene manipolazioni non autorizzate. \\
+
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Validator corrotto:} esclude eventi di modifica o revoca, creando una visione distorta della cronologia.
+
+                    \item \textbf{Attaccante con accesso privilegiato:} nasconde o filtra recensioni già pubblicate tramite modifiche UI.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{Storage on-chain degli eventi:} ogni azione è registrata pubblicamente come evento immutabile sulla blockchain.
+
+                    \item \textbf{Link IPFS trasparente:} le recensioni e le loro versioni sono sempre accessibili tramite CID verificabili.
+
+                    \item \textbf{Modulo di audit pubblico:} consente a chiunque di consultare, verificare e tracciare ogni recensione e stato.
+
+                    \item \textbf{Smart contract open-source:} il codice che regola la gestione delle recensioni è ispezionabile da tutti.
+                \end{itemize}
+
+        \subsection{T3 – Regole di modifica e revoca predefinite}
+            \noindent \textbf{Descrizione}
+                Le condizioni per modificare o revocare una recensione devono essere stabilite in anticipo e applicate in modo automatico e imparziale. Nessuna entità deve poter decidere arbitrariamente quali recensioni rimuovere o alterare. \\
+
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Utente fraudolento:} modifica o revoca la recensione più volte per trarne vantaggio.
+
+                    \item \textbf{Validator malevolo:} ignora revoche lecite o permette modifiche non autorizzate.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{Regole codificate nello smart contract:} l'utente può modificare o revocare solo entro i limiti stabiliti.
+
+                    \item \textbf{Verifica della proprietà del token:} ogni operazione richiede che l'utente sia ancora in possesso del relativo NFT.
+
+                    \item \textbf{Eventi on-chain tracciabili:} ogni modifica o revoca è registrata come evento pubblico, consultabile da tutti.
+
+                    \item \textbf{Cooldown tra modifiche:} impedisce aggiornamenti ripetuti e manipolazioni strategiche.
+                \end{itemize}
+
+        \subsection{T4 – Fiducia tecnica nelle componenti terze}
+            \noindent \textbf{Descrizione}
+                Se il sistema si affida a componenti esterne (eg. piattaforma o validator), la fiducia in esse deve essere motivata da meccanismi tecnici o economici che ne scoraggino comportamenti scorretti, senza richiedere un'autorità centralizzata. \\
+
+            \noindent \textbf{Minacce}
+                \begin{itemize}
+                    \item \textbf{Validator corrotto:} ignora transazioni valide o censura contenuti per interesse personale o pressione esterna.
+
+                    \item \textbf{Piattaforma non trasparente:} modifica localmente i dati, filtra recensioni o altera la reputazione visibile.
+
+                    \item \textbf{Entità collusa:} più attori si accordano per manipolare selettivamente il sistema senza essere rilevati.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{Rete permissionless:} nessun attore ha autorità esclusiva e ogni nodo può partecipare alla validazione.
+
+                    \item \textbf{Meccanismi di incentivo/penalità:} comportamenti sleali portano a perdita di reputazione o ban.
+
+                    \item \textbf{Audit decentralizzato:} ogni azione è verificabile pubblicamente tramite smart contract e moduli di audit.
+
+                    \item \textbf{Logica client stateless:} la piattaforma funge solo da interfaccia e non ha controllo diretto sulla visibilità o sulle regole applicate.
+                \end{itemize}
+
+    \section{Efficienza}
+        \subsection{E1 – Verifica dell'acquisto rapida}
+            \noindent \textbf{Descrizione}
+                Il sistema deve permettere la verifica dell'effettivo acquisto in modo rapido e fluido, senza introdurre complessità inutili per l'utente o rallentamenti lato validator. \\
+
+            \noindent \textbf{Rischi prestazionali}
+                \begin{itemize}
+                    \item \textbf{Utente disincentivato:} se il processo è lento o complesso, l'utente può rinunciare a recensire.
+
+                    \item \textbf{Validator sovraccarico:} se le operazioni sono computazionalmente pesanti, possono accumularsi ritardi nelle validazioni.
+
+                    \item \textbf{Piattaforma inefficiente:} genera NFT o gestisce transazioni con lentezza, rallentando il flusso d'uso.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{NFT generato automaticamente:} viene creato al momento dell'acquisto tramite minting on-chain immediato.
+
+                    \item \textbf{Verifica NFT minimale:} il contratto controlla solo che il token sia valido, non scaduto e non usato.
+
+                    \item \textbf{Operazioni asincrone:} la generazione e la validazione possono avvenire in passaggi separati, minimizzando la latenza percepita.
+
+                    \item \textbf{Requisiti minimi per review:} l'utente deve fornire solo firma, token ID e testo, rendendo il processo fluido.
+                \end{itemize}
+
+        \subsection{E2 – Pubblicazione fluida e a basso costo}
+            \noindent \textbf{Descrizione}
+                Il processo di pubblicazione di una recensione deve essere semplice per l'utente e poco oneroso in termini di risorse computazionali e costi (gas). \\
+
+            \noindent \textbf{Rischi prestazionali}
+                \begin{itemize}
+                    \item \textbf{Utente disincentivato:} non pubblica la recensione per via dei costi di gas o della complessità.
+
+                    \item \textbf{Overhead computazionale:} genera congestione nella rete se le operazioni richiedono troppe risorse.
+
+                    \item \textbf{Validator inefficiente:} impiega troppo tempo a processare la transazione, causando delay nella pubblicazione.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{Dati sensibili off-chain:} la recensione è caricata su IPFS, mentre on-chain si registra solo l’hash.
+
+                    \item \textbf{Transazioni ottimizzate:} ogni azione è ridotta a operazioni basilari su token ID, hash e firma.
+
+                    \item \textbf{Interfaccia guidata (dApp):} semplifica l'interazione e minimizza gli errori utente.
+                \end{itemize}
+
+        \subsection{E3 – Ottimizzazione delle operazioni crittografiche}
+            \noindent \textbf{Descrizione}
+                Le firme, verifiche e presentazioni crittografiche devono essere efficienti, supportabili anche su dispositivi consumer come smartphone, senza rallentare l'esperienza utente. \\
+
+            \noindent \textbf{Rischi prestazionali}
+                \begin{itemize}
+                    \item \textbf{Utente disincentivato:} non completa la procedura se la verifica crittografica è lenta o complessa.
+
+                    \item \textbf{DApp non ottimizzata:} rende l'esperienza frustrante su dispositivi mobili.
+
+                    \item \textbf{Malware:} approfitta di latenze per interferire con la firma o con i dati in memoria.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{Uso di EdDSA e BBS+:} algoritmi di firma efficienti, compatibili con dispositivi leggeri.
+
+                    \item \textbf{ZKP pre-computati localmente:} l'utente genera la prova a conoscenza zero prima dell'invio, evitando costi computazionali on-chain.
+
+                    \item \textbf{VP con selective disclosure:} l'utente presenta solo ciò che serve, riducendo il carico crittografico.
+
+                    \item \textbf{Plugin wallet:} compatibilità con MetaMask e plugin VC/ZKP.
+                \end{itemize}
+
+        \subsection{E4 – Scalabilità e prestazioni stabili}
+            \noindent \textbf{Descrizione}
+                Il sistema deve mantenere prestazioni adeguate anche in presenza di picchi di traffico o un numero elevato di utenti attivi, evitando colli di bottiglia o comportamenti degradanti. \\
+
+            \noindent \textbf{Rischi prestazionali}
+                \begin{itemize}
+                    \item \textbf{Validator sovraccarico:} rallenta il processo di validazione e pubblicazione, penalizzando l'esperienza.
+
+                    \item \textbf{Rete congestionata:} le transazioni diventano troppo costose o lente in caso di alto utilizzo.
+
+                    \item \textbf{DoS reputazionale:} un attore malizioso genera troppe interazioni per saturare il sistema.
+                \end{itemize}
+
+            \noindent \textbf{Contromisure adottate}
+                \begin{itemize}
+                    \item \textbf{Architettura distribuita:} sfrutta la natura permissionless per bilanciare il carico tra validator.
+
+                    \item \textbf{Soluzioni di scaling compatibili:} il sistema può essere migrato o supportato da Layer 2 e sistemi di rollup.
+
+                    \item \textbf{Dati off-chain su IPFS:} riduce la pressione sulla blockchain principale spostando contenuti esterni.
+
+                    \item \textbf{Cooldown e rate-limiting:} limita la frequenza di invio recensioni per utente, prevenendo abusi.
+                \end{itemize}
+
+    \section{Completezza}
+        \subsection{Comportamento corretto in assenza di attacchi}
+            \noindent \textbf{Descrizione}
+                La proprietà di completezza garantisce che, in uno scenario privo di attacchi e con attori onesti, il sistema operi come previsto. Tutte le funzionalità devono essere disponibili, verificabili e accessibili, e le regole applicate devono portare a risultati coerenti con gli obiettivi del progetto. \\
+
+            \noindent \textbf{Scenario}
+            \begin{itemize}
+                \item \textbf{Utente onesto:} effettua un acquisto legittimo tramite la piattaforma integrata e riceve un NFT soulbound che rappresenta la prova d'acquisto.
+
+                \item \textbf{Pubblicazione corretta:} l'utente, tramite DID pseudo-anonimo, accede alla funzione di recensione, redige un feedback firmato e lo invia tramite la dApp.
+
+                \item \textbf{Validazione:} lo smart contract verifica l’NFT, la firma digitale e il possesso di una VC valida. Se tutto è corretto, la recensione è pubblicata su IPFS e referenziata on-chain.
+
+                \item \textbf{Visibilità e tracciabilità:} la recensione è consultabile pubblicamente, ordinata secondo le regole codificate e può essere modificata o revocata solo secondo le condizioni predefinite.
+
+                \item \textbf{Reputazione:} all'utente viene assegnata reputazione positiva per la pubblicazione tempestiva della recensione. In caso contrario, l’NFT scade e viene applicata una penalità.
+
+                \item \textbf{Privacy:} in tutto il processo, l'identità dell'utente non viene mai esposta. Le transazioni sono firmate con DID e la VC non è pubblicata, ma solo verificata.
+            \end{itemize}
+
+            \noindent \textbf{Garanzie}
+            \begin{itemize}
+                \item Ogni funzionalità rispetta le proprietà di sicurezza definite in fase di progettazione (C, P, I, T, E).
+
+                \item Le componenti on-chain e off-chain cooperano in modo verificabile, senza necessità di fiducia in entità centrali.
+
+                \item Il comportamento degli utenti onesti viene premiato, mentre quello inadempiente comporta una penalizzazione automatica.
+
+                \item La trasparenza e la tracciabilità sono garantite, ma la privacy dell'utente è preservata tramite ZKP e selective disclosure.
+            \end{itemize}
+
+    \section{Limiti strutturali del sistema}
+        \noindent \textbf{Descrizione} \\
+            Nonostante la progettazione abbia previsto meccanismi crittografici, reputazionali e procedurali per affrontare una vasta gamma di minacce, alcune vulnerabilità strutturali restano parzialmente o completamente non risolvibili all'interno del modello decentralizzato adottato. In questa sezione si analizzano i principali limiti riconosciuti del sistema. \\
+
+        \noindent \textbf{Reviewer retribuiti} \\
+            Il sistema non può impedire che un utente reale (in possesso di NFT e VC legittimi) sia incentivato economicamente da un venditore esterno a lasciare una recensione positiva. Poiché l'utente ha effettivamente effettuato l'acquisto, e la recensione rispetta tutte le condizioni tecniche, non esistono indicatori crittografici per distinguere un comportamento genuino da uno corrotto. \\
+            \textit{Mitigazione parziale:} il sistema limita la visibilità di pattern sospetti attraverso il modulo di audit, ma non può rilevare accordi economici off-chain. \\
+
+        \noindent \textbf{Venditore collusivo fuori sistema} \\
+            Analogamente, un venditore può contattare un acquirente tramite canali esterni (eg. email, social) e offrirgli un rimborso in cambio di una recensione positiva. Poiché la transazione è reale e la recensione formalmente valida, non è possibile intervenire on-chain. \\
+            \textit{Mitigazione parziale:} possibili indizi possono emergere da analisi esterne, ma il sistema non ha accesso ai canali di comunicazione off-chain. \\
+
+        \noindent \textbf{Malware sul dispositivo} \\
+            Il sistema non può proteggere l'utente nel caso in cui il dispositivo usato sia compromesso (keylogger, clipboard hijack, browser modificati). In tal caso, la chiave privata può essere esfiltrata e usata per firmare azioni indesiderate. \\
+            \textit{Mitigazione parziale:} l'uso di wallet hardware, autenticazioni multi-livello e notifiche off-chain può ridurre l'impatto, ma non risolve il problema alla radice. \\
+
+        \noindent \textbf{Attacchi comportamentali basati su analisi AI} \\
+            Anche in presenza di DID rotabili, CID anonimi e metadati minimizzati, un attaccante dotato di capacità avanzate (eg. AI per l'analisi linguistica o temporale) può cercare correlazioni stilistiche tra recensioni. \\
+            \textit{Mitigazione minima:} l'anonimato linguistico è fuori dallo scope della progettazione tecnica. \\
+
+        \noindent \textbf{Compromissione degli Issuer} \\
+            Sebbene il sistema preveda il controllo dell'identità tramite Issuer fidati, la fiducia in essi è ancora un punto centrale. Un Issuer compromesso può rilasciare VC a identità fittizie. \\
+            \textit{Mitigazione tecnica:} l'uso di revocation list, audit e circuiti ZKP limita l'impatto, ma non può eliminarlo del tutto, in quanto la fiducia nell’Issuer è un requisito inevitabile. \\
+
+        \noindent \textbf{Conclusione} \\
+            I limiti sopra esposti non derivano da errori progettuali, ma da vincoli intrinseci al paradigma decentralizzato. Il sistema riesce a coprire in modo robusto tutte le minacce identificabili sul piano tecnico-cripto-comportamentale, ma resta aperto a dinamiche esterne non tracciabili on-chain, la cui rilevazione richiede strumenti supplementari (eg. governance, analisi esterne, auditing umano).
+
+    \newpage
+
+    % Radar chart for properties
+    \begin{figure}[H]
+        \includesvg[width=1\textwidth]{Images/radar_sicurezza.svg}
+        \caption{Grado di soddisfacimento delle proprietà principali di sicurezza}
+        \label{fig:radar-wp3}
+    \end{figure}
