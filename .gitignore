@@ -1,16 +1,17 @@
 # Files/directories to be ignored - Project under Apache-2.0 License
 # Copyright 2025 Emanuele Relmi
 /.idea/
-/my-app/
 /code/artifacts/
 /code/cache/
 /code/package-lock.json
 /code/node_modules/
+/code/scripts/contract-addresses.json
+
 /code/frontend/package-lock.json
-/code/frontend/.env.local
 /code/frontend/node_modules/
-/code/backend/.env
-/code/backend/sp-private.key
-/code/backend/sp-public.crt
-/code/backend/cert.b64
-/code/backend/key.b64
+
+/code/backend/node_modules/
+/code/backend/package-lock.json
+
+/code/idp-mock/node-modules/
+/code/idp-mock/package-lock.json
