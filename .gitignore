@@ -13,5 +13,5 @@
 /code/backend/node_modules/
 /code/backend/package-lock.json
 
-/code/idp-mock/node-modules/
+/code/idp-mock/node_modules
 /code/idp-mock/package-lock.json

@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2025 Emanuele Relmi
 
-# This script generates an Ed25519 key pair in JWK format, usable for both SAML signature and VC.
+# This script generates an RSA key pair in JWK format, usable for both SAML signature and VC.
 
-# Generate Ed25519 key pair using openssl
+# Generate RSA key pair using openssl
 openssl genpkey -algorithm RSA -out certs/idp_key.pem -pkeyopt rsa_keygen_bits:2048
 
 # Extract public key
