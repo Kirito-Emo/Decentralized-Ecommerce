@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2025 Emanuele Relmi
-// ReviewDApp.tsx
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Scene from "./Scene";
 import "@fontsource/poppins/400.css";
 import "@fontsource/poppins/800.css";
@@ -13,6 +12,9 @@ import { ethers } from "ethers";
 import ReviewStorage from "./abi/ReviewStorage.json";
 import reviewAddress from "./abi/ReviewStorage-address.json";
 import { LoginButton } from "./components/LoginButton";
+import { VCCard } from "./components/VCCard";
+import { DIDTable } from "./components/DIDTable";
+import { generateEd25519DID } from "./utils/generateEd25519DID";
 
 interface Feature {
   title: string;
@@ -50,19 +52,44 @@ export default function ReviewDApp() {
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const [wallet, setWallet] = useState<string | null>(null);
   const [reviews, setReviews] = useState<string[]>([]);
-  const [vc, setVc] = useState<any>(null);
+
+  // VC persistence
+  const [vc, setVc] = useState<any>(() => {
+    const stored = localStorage.getItem("vc");
+    return stored ? JSON.parse(stored) : null;
+  });
+  // DID array, each one with skHex, pkHex
+  const [didEntries, setDidEntries] = useState<any[]>(() => {
+    const stored = localStorage.getItem("didEntries");
+    return stored ? JSON.parse(stored) : [];
+  });
+
+  // Load VC from URL on initial render and scroll to features section
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const vcBase64 = params.get("vc");
+    if (vcBase64) {
+      try {
+        const json = atob(vcBase64);
+        setVc(JSON.parse(json));
+        localStorage.setItem("vc", json);
+        setExpandedCard("Wallet & Access");
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+        setTimeout(() => {
+          const section = document.getElementById("features-section");
+          if (section) section.scrollIntoView({ behavior: "smooth" });
+        }, 400);
+      } catch (err) {
+        setVc(null);
+        localStorage.removeItem("vc");
+      }
+    }
+  }, []);
 
   const scrollToCards = () => {
     const target = document.getElementById("features-section");
     if (target) target.scrollIntoView({ behavior: "smooth" });
-  };
-
-  // Fetch VC from orchestrator
-  const issueVc = async () => {
-    const resp = await fetch(`${process.env.REACT_APP_API_URL}/vc/issue`, {
-      credentials: 'include',
-    });
-    if (resp.ok) setVc(await resp.json());
   };
 
   const connectWallet = async () => {
@@ -91,20 +118,39 @@ export default function ReviewDApp() {
     }
   };
 
+  // Create new DID and update table
+  async function handleCreateDid() {
+    console.log("Create DID clicked!");
+    const didData = await generateEd25519DID();
+    const newEntry = {
+      did: didData.did,
+      skHex: didData.skHex,
+      pkHex: didData.pkHex,
+      vcName: vc?.credentialSubject?.name || "–"
+    };
+    const updated = [...didEntries, newEntry];
+    setDidEntries(updated);
+    console.log("didEntries updated:", didEntries);
+    localStorage.setItem("didEntries", JSON.stringify(updated));
+  }
+
+  // Download DID, SK, PK as text file
+  function handleDownloadKey(did: string, skHex: string, pkHex: string) {
+    const content = `DID: ${did}\nPrivate key (hex): ${skHex}\nPublic key (hex): ${pkHex}\n`;
+    const blob = new Blob([content], { type: "text/plain" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `did-keys.txt`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
   return (
       <div className="relative h-screen w-full text-[#ccccff] font-[Poppins] overflow-y-scroll snap-y snap-mandatory bg-gradient-to-b from-[#0f0f1f] via-[#1a0033] to-[#0f0f1f]">
         {/* SPID Login Button */}
         <header className="p-4 flex justify-end">
           <LoginButton />
         </header>
-
-        {/* Show VC if issued */}
-        {vc && (
-            <section className="p-6 bg-black/50 text-white">
-              <h2>Your Verifiable Credential</h2>
-              <pre>{JSON.stringify(vc, null, 2)}</pre>
-            </section>
-        )}
 
         {/* Background Scene */}
         <div className="fixed inset-0 z-0 pointer-events-none">
@@ -211,13 +257,31 @@ export default function ReviewDApp() {
                             {f.description}
                           </motion.div>
                           {expandedCard === "Wallet & Access" && (
-                              <button
-                                  onClick={issueVc}
-                                  className="mb-4 mt-[20px] px-8 py-4 rounded-full bg-cyan-500/20 text-cyan-300 border-cyan-300/30 hover:bg-cyan-400/20 transition-all duration-300 backdrop-blur-md animate-pulse hover:scale-105"
-                                  style={{ fontSize: "18px", fontWeight: "600" }}
-                              >
-                                Get VC
-                              </button>
+                              <div className="flex flex-row w-full h-full items-center justify-center gap-16">
+                                {/* VC CARD - left */}
+                                <div className="flex-1 flex flex-col items-center justify-center rounded-2xl shadow-2xl p-8 max-w-md w-full">
+                                  <div className="bg-[lightskyblue] shadow-xl p-8 max-w-sm w-full flex flex-col items-center mb-6 border-2 border-cyan-400/50"
+                                        style={{ fontSize: "16px", color: "black", width: "60%", borderRadius: "24px" }}
+                                  >
+                                    <VCCard vc={vc} />
+                                    <button
+                                        onClick={() => window.location.href = "http://localhost:8082/login"}
+                                        className="rounded-full bg-cyan-500/30 text-cyan-900 border-cyan-400/70 hover:bg-cyan-400/30 transition-all"
+                                        style={{ margin: "auto", marginTop: "20px", padding: "10px", width: "120px", fontSize: "20px", fontWeight: "800" }}
+                                    >
+                                      Get VC
+                                    </button>
+                                  </div>
+                                </div>
+                                {/* DID TABLE - right */}
+                                <div className="flex-1 flex flex-col items-center justify-center">
+                                  <DIDTable
+                                      didEntries={didEntries}
+                                      onCreateDid={handleCreateDid}
+                                      onDownloadKey={handleDownloadKey}
+                                  />
+                                </div>
+                              </div>
                           )}
                           {expandedCard === "Signed Reviews" && (
                               <button
@@ -230,8 +294,8 @@ export default function ReviewDApp() {
                           )}
                           <motion.button
                               onClick={() => setExpandedCard(null)}
-                              className="mt-[450px] px-6 py-3 rounded-full text-white shadow-lg bg-cyan-500/20 border-cyan-300/30 hover:bg-cyan-400/20 transition animate-pulse hover:scale-105"
-                              style={{ fontSize: "16px", fontWeight: "600" }}
+                              className="mx-[auto] my-[15px] px-6 py-3 rounded-full shadow-lg bg-cyan-500/20 border-cyan-300/30 hover:bg-cyan-400/20 transition animate-pulse hover:scale-105"
+                              style={{ fontSize: "20px", fontWeight: "600" }}
                           >
                             Close
                           </motion.button>
@@ -249,7 +313,7 @@ export default function ReviewDApp() {
           <p>Built with ❤</p>
           <button
               onClick={() => window.open("https://github.com/Kirito-Emo/Decentralized-Ecommerce", "_blank")}
-              className="px-12 py-6 backdrop-blur-md rounded-full text-white shadow-lg bg-cyan-500/20 border-cyan-300/30 hover:bg-cyan-400/20 transition animate-pulse hover:scale-105 transition-all duration-300"
+              className="px-12 py-6 backdrop-blur-md rounded-full text-white shadow-lg bg-cyan-500/20 border-cyan-300/30 hover:bg-cyan-400/20 animate-pulse hover:scale-105 transition-all duration-300"
               style={{ minWidth: "150px", minHeight: "40px", fontSize: "16px", fontWeight: "600" }}
           >
             View on GitHub

@@ -52,10 +52,9 @@ app.post("/assert", (req, res) => {
         };
 
         // Encode the VC as base64 for the frontend
-        const vcBase64 = encodeURIComponent(Buffer.from(JSON.stringify(vc)).toString("base64"));
-
+        const vcBase64 = Buffer.from(JSON.stringify(vc)).toString("base64");
         // Redirect to the frontend with the VC
-        res.redirect(`http://localhost:5173/vc?vc=${vcBase64}`);
+        res.redirect(`http://localhost:5173/?vc=${vcBase64}`);
     } catch (err) {
         res.status(400).json({ error: (err as Error).message });
     }

@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2025 Emanuele Relmi
-// App.tsx
 
-import React from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import ReviewDApp from "./ReviewDApp";
 
 export default function App() {
-  return <ReviewDApp />;
+    return (
+        <Router>
+            <Routes>
+                <Route path="/" element={<ReviewDApp />} />
+            </Routes>
+        </Router>
+    );
 }

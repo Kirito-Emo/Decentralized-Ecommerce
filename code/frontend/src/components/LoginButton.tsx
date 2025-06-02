@@ -2,8 +2,6 @@
 // Copyright 2025 Emanuele Relmi
 // LoginButton.tsx
 
-import React from 'react';
-
 /**
  * Button that triggers SPID authentication flow
  */
