@@ -22,16 +22,16 @@ contract ReviewManager is AccessControl {
 
     uint256 public cooldownTime = 1 days;
 
-    mapping(address => bool) public isBanned;
+    mapping(string => bool) public isBanned;
     mapping(uint256 => uint256) public lastEdit;
-    mapping(address => uint256) public reputation;
+    mapping(string => uint256) public reputation;
 
     bytes32 public constant MODERATOR_ROLE = keccak256("MODERATOR_ROLE");
 
-    event ReviewSubmitted(address indexed user, uint256 indexed tokenId, uint256 reviewId);
+    event ReviewSubmitted(string indexed did, uint256 indexed tokenId, uint256 reviewId);
     event ReviewEdited(uint256 indexed reviewId, string newCID);
     event ReviewRevoked(uint256 indexed reviewId);
-    event UserBanned(address indexed user);
+    event UserBanned(string indexed did);
 
     constructor(
         address _reviewNFT,
@@ -54,49 +54,56 @@ contract ReviewManager is AccessControl {
         semaphoreVerifier = SemaphoreVerifier(_semaphoreVerifier);
     }
 
-    modifier notBanned() {
-        require(!isBanned[msg.sender], "User banned");
+    /// @dev Modifier to check if the DID is not banned
+    modifier notBanned(string memory did) {
+        require(!isBanned[did], "DID banned");
         _;
     }
 
-    function submitReview(uint256 tokenId, string memory ipfsCID) external notBanned {
-        require(reviewNFT.ownerOf(tokenId) == msg.sender, "Not owner of NFT");
+    /// @dev Function to submit a review
+    function submitReview(string memory did, uint256 tokenId, string memory ipfsCID) external notBanned(did) {
+        require(_isTokenOwnedByDID(tokenId, did), "Not owner of NFT");
         require(reviewNFT.isValidForReview(tokenId), "NFT not eligible for review");
 
-        reviewNFT.useNFT(tokenId);
-        uint256 reviewId = reviewStorage.storeReview(msg.sender, ipfsCID);
+        reviewNFT.useNFT(tokenId, did);
+        uint256 reviewId = reviewStorage.storeReview(did, ipfsCID);
 
-        reputation[msg.sender]++;
-        badgeNFT.updateReputation(msg.sender, 1);
+        reputation[did]++;
+        badgeNFT.updateReputation(did, 1);
 
-        emit ReviewSubmitted(msg.sender, tokenId, reviewId);
+        emit ReviewSubmitted(did, tokenId, reviewId);
     }
 
-    function editReview(uint256 reviewId, string memory newCID) external notBanned {
+    /// @dev Function to edit a review
+    function editReview(string memory did, uint256 reviewId, string memory newCID) external notBanned(did) {
         require(reviewStorage.isOwner(msg.sender, reviewId), "Not owner of review");
         require(block.timestamp >= lastEdit[reviewId] + cooldownTime, "Cooldown in progress");
 
-        reviewStorage.updateReview(reviewId, newCID);
+        reviewStorage.updateReview(reviewId, newCID, did);
         lastEdit[reviewId] = block.timestamp;
 
         emit ReviewEdited(reviewId, newCID);
     }
 
-    function revokeReview(uint256 reviewId) external notBanned {
+    /// @dev Function to revoke a review
+    function revokeReview(string memory did, uint256 reviewId) external notBanned(did) {
         require(reviewStorage.isOwner(msg.sender, reviewId), "Not owner of review");
-        reviewStorage.revokeReview(reviewId);
+        reviewStorage.revokeReview(reviewId, did);
         emit ReviewRevoked(reviewId);
     }
 
-    function getReputation(address user) external view returns (uint256) {
-        return reputation[user];
+    /// @dev Function to get the reputation of a DID
+    function getReputation(string memory did) external view returns (uint256) {
+        return reputation[did];
     }
 
-    function banUser(address user) external onlyRole(MODERATOR_ROLE) {
-        isBanned[user] = true;
-        emit UserBanned(user);
+    /// @dev Function to ban a DID
+    function banUser(string memory did) external onlyRole(MODERATOR_ROLE) {
+        isBanned[did] = true;
+        emit UserBanned(did);
     }
 
+    /// @dev Function to verify VP or BBS ZKP proofs
     function verifyZKP(bytes calldata proof, bytes32[] calldata publicSignals, string memory protocol) external view returns (bool) {
         if (keccak256(abi.encodePacked(protocol)) == keccak256("vp")) {
             return vpVerifier.verifyProof(proof, publicSignals);
@@ -107,6 +114,7 @@ contract ReviewManager is AccessControl {
         }
     }
 
+    /// @dev Function to verify Semaphore ZKP proofs
     function verifySemaphoreProof(
         uint[2] calldata _pA,
         uint[2][2] calldata _pB,
@@ -115,5 +123,10 @@ contract ReviewManager is AccessControl {
         uint merkleTreeDepth
     ) external view returns (bool) {
         return semaphoreVerifier.verifyProof(_pA, _pB, _pC, _publicSignals, merkleTreeDepth);
+    }
+
+    /// @dev Internal function to check if the token is owned by the DID
+    function _isTokenOwnedByDID(uint256 tokenId, string memory did) internal view returns (bool) {
+        return (keccak256(bytes(reviewNFT.ownerDIDOf(tokenId))) == keccak256(bytes(did)));
     }
 }

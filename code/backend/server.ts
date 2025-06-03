@@ -43,7 +43,7 @@ app.post("/assert", (req, res) => {
         const vc = {
             "@context": ["https://www.w3.org/2018/credentials/v1"],
             type: ["VerifiableCredential"],
-            issuer: "http://localhost:8443/metadata",
+            issuer: "did:web:localhost8443",
             issuanceDate: new Date().toISOString(),
             credentialSubject: {
                 id: nameID,

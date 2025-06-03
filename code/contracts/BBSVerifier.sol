@@ -10,21 +10,23 @@ interface IBBSVerifier {
 }
 
 contract BBSVerifier is IBBSVerifier {
-    address public trustedVerifier;
+    string public trustedVerifierDID;
 
-    event VerifierUpdated(address indexed newVerifier);
+    /// @dev Event emitted when the verifier DID is updated
+    event VerifierUpdated(string newVerifierDID);
 
-    constructor(address _verifier) {
-        trustedVerifier = _verifier;
+    /// @dev Constructor to set the initial trusted verifier address
+    constructor(string memory _verifierDID) {
+        trustedVerifierDID = _verifierDID;
     }
 
-    // Modificatore per limitare l'accesso al verificatore
-    function updateVerifier(address _verifier) external {
-        trustedVerifier = _verifier;
-        emit VerifierUpdated(_verifier);
+    /// @dev Update the trusted verifier address
+    function updateVerifier(string memory _verifierDID) external {
+        trustedVerifierDID = _verifierDID;
+        emit VerifierUpdated(_verifierDID);
     }
 
-    // Funzione per verificare la prova BBS+
+    /// @dev Verify a zero-knowledge proof using the trusted verifier
     function verifyProof(
         bytes calldata proof,
         bytes32[] calldata publicSignals

@@ -13,9 +13,9 @@ app.post("/sso", (_req, res) => {
     // Build the SAML Assertion (without digital signature)
     const assertionXml =
         `<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_assert_${Date.now()}" Version="2.0" IssueInstant="${new Date().toISOString()}">` +
-        `<saml:Issuer>http://localhost:8443/metadata</saml:Issuer>` +
+        `<saml:Issuer>did:web:localhost8443</saml:Issuer>` +
         `<saml:Subject>` +
-        `<saml:NameID>testuser@mockidp.local</saml:NameID>` +
+        `<saml:NameID>did:web:localhost8443</saml:NameID>` +
         `</saml:Subject>` +
         `<saml:Conditions NotBefore="${new Date().toISOString()}" NotOnOrAfter="${new Date(Date.now() + 5 * 60 * 1000).toISOString()}"/>` +
         `<saml:AuthnStatement AuthnInstant="${new Date().toISOString()}"/>` +
@@ -24,7 +24,7 @@ app.post("/sso", (_req, res) => {
     // Build the SAML Response containing the unsigned assertion
     const samlResponse =
         `<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_resp_${Date.now()}" Version="2.0" IssueInstant="${new Date().toISOString()}" Destination="http://localhost:8082/assert">` +
-        `<saml:Issuer>http://localhost:8443/metadata</saml:Issuer>` +
+        `<saml:Issuer>did:web:localhost8443</saml:Issuer>` +
         assertionXml +
         `</samlp:Response>`;
 

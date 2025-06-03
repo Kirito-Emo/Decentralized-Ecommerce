@@ -10,19 +10,23 @@ interface IVPVerifier {
 }
 
 contract VPVerifier is IVPVerifier {
-    address public trustedVerifier;
+    string public trustedVerifierDID;
 
-    event VerifierUpdated(address indexed newVerifier);
+    /// @dev Event emitted when the verifier DID is updated
+    event VerifierUpdated(string newVerifierDID);
 
-    constructor(address _verifier) {
-        trustedVerifier = _verifier;
+    /// @dev Constructor to set the initial trusted verifier DID
+    constructor(string memory _verifierDID) {
+        trustedVerifierDID = _verifierDID;
     }
 
-    function updateVerifier(address _verifier) external {
-        trustedVerifier = _verifier;
-        emit VerifierUpdated(_verifier);
+    /// @dev Update the trusted verifier DID
+    function updateVerifier(string memory _verifierDID) external {
+        trustedVerifierDID = _verifierDID;
+        emit VerifierUpdated(_verifierDID);
     }
 
+    /// @dev Verify a zero-knowledge proof using the trusted verifier
     function verifyProof(
         bytes calldata proof,
         bytes32[] calldata publicSignals
