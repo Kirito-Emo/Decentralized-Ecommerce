@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: Apache 2.0
 // Copyright 2025 Emanuele Relmi
+
+/**
+ * Deploy script for the ReviewManager contract.
+ * Loads all dependency contract addresses from contract-addresses.json.
+ * Deploys ReviewManager and saves its address for further deployments.
+ */
+
 const fs = require("fs");
 const path = require("path");
 const { ethers } = require("hardhat");
@@ -16,6 +23,12 @@ async function main() {
     const bbsVerifier = addresses.BBSVerifier;
     const semaphoreVerifier = addresses.SemaphoreVerifier;
 
+    // Check if all required addresses are present
+    if (!reviewNFT || !badgeNFT || !reviewStorage || !vcRegistry || !vpVerifier || !bbsVerifier || !semaphoreVerifier) {
+        throw new Error("Some dependency contract addresses are missing!");
+    }
+
+    // Deploy the ReviewManager contract with all dependencies
     const ReviewManager = await ethers.getContractFactory("ReviewManager");
     const manager = await ReviewManager.deploy(
         reviewNFT,

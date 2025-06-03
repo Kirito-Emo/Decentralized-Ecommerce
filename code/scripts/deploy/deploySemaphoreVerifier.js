@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: Apache 2.0
 // Copyright 2025 Emanuele Relmi
+
+/**
+ * Deploy script for the SemaphoreVerifier smart contract.
+ * Saves contract address in contract-addresses.json
+ * Ethers.js v6, Hardhat, Ganache localhost:8545.
+ */
+
 const fs = require("fs");
 const path = require("path");
 const { ethers } = require("hardhat");
-const { Semaphore } = require("hardhat/internal/vendor/await-semaphore");
 
 async function main() {
-    const [deployer] = await ethers.getSigners();   // Mocking the deployer address
     const SemaphoreVerifier = await ethers.getContractFactory("SemaphoreVerifier");
     const semaphoreVerifier = await SemaphoreVerifier.deploy();
 
