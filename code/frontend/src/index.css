@@ -1,8 +1,10 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ * Copyright (c) 2025 Emanuele Relmi
+ */
 
 @import "tw-animate-css";
-
 @custom-variant dark (&:is(.dark *));
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -128,4 +130,44 @@ html, body {
   padding: 0;
   box-sizing: border-box;
   overflow-x: hidden;
+}
+
+h1, h2, h3, .badge, span {
+  font-family: 'Orbitron', 'Audiowide', Arial, sans-serif;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+
+code, .font-mono {
+  font-family: 'Share Tech Mono', 'Orbitron', monospace;
+  font-weight: 400;
+}
+
+.confetti-badge svg circle {
+  animation: badge-confetti-float 2.5s infinite alternate;
+}
+.confetti-badge svg circle:nth-child(1) {
+  animation-delay: 0s;
+  fill: #ff00ff;
+}
+.confetti-badge svg circle:nth-child(2) {
+  animation-delay: 0.5s;
+  fill: #00fff7;
+}
+.confetti-badge svg circle:nth-child(3) {
+  animation-delay: 1s;
+  fill: #ffe600;
+}
+.confetti-badge svg circle:nth-child(4) {
+  animation-delay: 1.3s;
+  fill: #ba85ff;
+}
+.confetti-badge svg circle:nth-child(5) {
+  animation-delay: 1.6s;
+  fill: #f88bff;
+}
+@keyframes badge-confetti-float {
+  0% { transform: translateY(0) scale(1);}
+  50% { transform: translateY(-12px) scale(1.20);}
+  100% { transform: translateY(0) scale(1);}
 }

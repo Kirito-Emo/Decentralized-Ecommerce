@@ -1,21 +1,31 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2025 Emanuele Relmi
 
+/**
+ * ReviewDApp.tsx
+ *
+ * Main dApp component for the decentralized review platform.
+ * Organizes Three.js scene, login, navigation, card system and features panels.
+ *
+ * Panel logic is fully modular: each core feature has its own subcomponent.
+ */
+
 import React, { useEffect, useState } from "react";
 import Scene from "./Scene";
-import "@fontsource/poppins/400.css";
-import "@fontsource/poppins/800.css";
 import { IdCard, MessageSquareText, ShieldUser } from "lucide-react";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import clsx from "clsx";
 import { ethers } from "ethers";
-import ReviewStorage from "./abi/ReviewStorage.json";
-import reviewAddress from "./abi/ReviewStorage-address.json";
-import { LoginButton } from "./components/LoginButton";
-import { VCCard } from "./components/VCCard";
-import { DIDTable } from "./components/DIDTable";
 import { generateEd25519DID } from "./utils/generateEd25519DID";
 
+// --- Import modular panels ---
+import WalletAccessPanel from "./panels/WalletAccessPanel.tsx";
+import SignedReviewsPanel from "./panels/SignedReviewsPanel.tsx";
+import ZKPReputationPanel from "./panels/ZKPReputationPanel.tsx";
+
+/**
+ * FeatureCard config for rendering selection UI and linking to correct panel.
+ */
 interface Feature {
   title: string;
   description: string;
@@ -24,6 +34,7 @@ interface Feature {
   glow: string;
 }
 
+// List of available features/cards.
 const features: Feature[] = [
   {
     title: "Wallet & Access",
@@ -49,22 +60,24 @@ const features: Feature[] = [
 ];
 
 export default function ReviewDApp() {
+  // State for expanded card panel (feature)
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  // State for connected wallet address
   const [wallet, setWallet] = useState<string | null>(null);
-  const [reviews, setReviews] = useState<string[]>([]);
 
-  // VC persistence
+  // --- VC (Verifiable Credential) persistence and DID entries ---
   const [vc, setVc] = useState<any>(() => {
     const stored = localStorage.getItem("vc");
     return stored ? JSON.parse(stored) : null;
   });
-  // DID array, each one with skHex, pkHex
   const [didEntries, setDidEntries] = useState<any[]>(() => {
     const stored = localStorage.getItem("didEntries");
     return stored ? JSON.parse(stored) : [];
   });
 
-  // Load VC from URL on initial render and scroll to features section
+  /**
+   * On first render: load VC from URL if present and scroll to features.
+   */
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const vcBase64 = params.get("vc");
@@ -75,7 +88,6 @@ export default function ReviewDApp() {
         localStorage.setItem("vc", json);
         setExpandedCard("Wallet & Access");
         window.history.replaceState({}, document.title, window.location.pathname);
-
         setTimeout(() => {
           const section = document.getElementById("features-section");
           if (section) section.scrollIntoView({ behavior: "smooth" });
@@ -87,11 +99,29 @@ export default function ReviewDApp() {
     }
   }, []);
 
+  /**
+   * Effect to manage body overflow when a card is expanded.
+   */
+  useEffect(() => {
+    if (expandedCard) {
+      document.body.classList.add("overflow-hidden");
+    } else {
+      document.body.classList.remove("overflow-hidden");
+    }
+    return () => document.body.classList.remove("overflow-hidden");
+  }, [expandedCard]);
+
+  /**
+   * Scroll to cards/feature section.
+   */
   const scrollToCards = () => {
     const target = document.getElementById("features-section");
     if (target) target.scrollIntoView({ behavior: "smooth" });
   };
 
+  /**
+   * Connect wallet (MetaMask, etc.).
+   */
   const connectWallet = async () => {
     try {
       const provider = new ethers.BrowserProvider((window as any).ethereum);
@@ -102,25 +132,10 @@ export default function ReviewDApp() {
     }
   };
 
-  const loadReviewsFromIPFS = async () => {
-    try {
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const signer = await provider.getSigner();
-      const contract = new ethers.Contract(
-          reviewAddress.address,
-          ReviewStorage.abi,
-          signer
-      );
-      const data: string[] = await contract.getAllReviews();
-      setReviews(data);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  // Create new DID and update table
+  /**
+   * Create a new Ed25519 DID and persist in localStorage.
+   */
   async function handleCreateDid() {
-    console.log("Create DID clicked!");
     const didData = await generateEd25519DID();
     const newEntry = {
       did: didData.did,
@@ -130,11 +145,12 @@ export default function ReviewDApp() {
     };
     const updated = [...didEntries, newEntry];
     setDidEntries(updated);
-    console.log("didEntries updated:", didEntries);
     localStorage.setItem("didEntries", JSON.stringify(updated));
   }
 
-  // Download DID, SK, PK as text file
+  /**
+   * Download a DID+key as a text file.
+   */
   function handleDownloadKey(did: string, skHex: string, pkHex: string) {
     const content = `DID: ${did}\nPrivate key (hex): ${skHex}\nPublic key (hex): ${pkHex}\n`;
     const blob = new Blob([content], { type: "text/plain" });
@@ -145,39 +161,51 @@ export default function ReviewDApp() {
     URL.revokeObjectURL(link.href);
   }
 
-  return (
-      <div className="relative h-screen w-full text-[#ccccff] font-[Poppins] overflow-y-scroll snap-y snap-mandatory bg-gradient-to-b from-[#0f0f1f] via-[#1a0033] to-[#0f0f1f]">
-        {/* SPID Login Button */}
-        <header className="p-4 flex justify-end">
-          <LoginButton />
-        </header>
+  // -------------- RENDER -----------------
 
-        {/* Background Scene */}
+  return (
+      <div className={`relative h-screen w-full text-[#ccccff] font-orbitron bg-gradient-to-b from-[#0f0f1f] via-[#1a0033] to-[#0f0f1f] ${
+          expandedCard
+              ? "overflow-hidden snap-none"
+              : wallet
+                  ? "overflow-y-scroll snap-y snap-mandatory"
+                  : "overflow-y-scroll"
+      }`}>
+        {/* Three.js Background Scene */}
         <div className="fixed inset-0 z-0 pointer-events-none">
           <div className="absolute w-full h-full bg-gradient-to-b from-transparent via-transparent to-black" />
           <Scene />
         </div>
 
-        {/* Hero Section */}
+        {/* Hero section */}
         <section className="relative z-10 h-screen snap-start flex flex-col items-center justify-center text-center px-4">
-          <div
-              className="absolute px-8 py-4 rounded-full backdrop-blur-lg bg-white/10 border z-0"
-              style={{ minWidth: "50%" }}
-          />
+          <div className="absolute px-8 py-4 rounded-full backdrop-blur-lg bg-white/10 border z-0" style={{ minWidth: "50%" }} />
           <h1 className="relative z-10 text-[50px] font-bold drop-shadow-[0_0_20px_#00fff7]">
             Your Identity. Your Reviews. Your Control.
           </h1>
           <div className="mt-12 flex space-x-[50px] items-center justify-center ">
             <button
-                onClick={connectWallet}
-                className="px-[50px] py-[20px] rounded-full bg-cyan-500/20 text-cyan-300 border-cyan-300/30 hover:bg-cyan-400/20 transition-all duration-300 backdrop-blur-md animate-pulse hover:scale-105"
+                onClick={wallet ? undefined : connectWallet}
+                disabled={!!wallet}
+                className={clsx(
+                    "px-[50px] py-[20px] rounded-full bg-cyan-500/20 text-cyan-300 border-cyan-300/30 transition-all duration-300 backdrop-blur-md animate-pulse hover:scale-105",
+                    wallet
+                        ? "bg-cyan-400/20 text-white animate-none cursor-default"
+                        : "hover:bg-cyan-400/20 animate-pulse hover:scale-105"
+                )}
                 style={{ minWidth: "50%", fontSize: "24px", fontWeight: "600" }}
             >
-              Connect Wallet
+              {wallet ? `Wallet Connected` : "Connect Wallet"}
             </button>
             <button
-                onClick={scrollToCards}
-                className="px-[50px] py-[20px] rounded-full bg-cyan-500/20 text-cyan-300 border-cyan-300/30 hover:bg-cyan-400/20 transition-all duration-300 backdrop-blur-md animate-pulse hover:scale-105"
+                onClick={wallet ? scrollToCards : undefined}
+                disabled={!wallet}
+                className={clsx(
+                    "px-[50px] py-[20px] rounded-full bg-cyan-500/20 text-cyan-300 border-cyan-300/30 transition-all duration-300 backdrop-blur-md",
+                    wallet
+                        ? "hover:bg-cyan-400/20 animate-pulse hover:scale-105"
+                        : "opacity-40 cursor-not-allowed"
+                )}
                 style={{ minWidth: "50%", fontSize: "24px", fontWeight: "600" }}
             >
               Explore Features
@@ -185,42 +213,44 @@ export default function ReviewDApp() {
           </div>
         </section>
 
-        {/* Features Section with two-column layout */}
+        {/* Features grid and expanded feature panel */}
         <section
             id="features-section"
             className="relative z-10 h-screen snap-start flex bg-gradient-to-b from-transparent to-black"
         >
           <LayoutGroup>
-            {/* Left column: grid of compact cards */}
-            <div className="w-1/2 flex items-center justify-center mx-[200px] mr-[400px] px-[40px]">
-              <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[80px]">
-                {features.map((f) => (
-                    <motion.div
-                        key={f.title}
-                        layoutId={`card-${f.title}`}
-                        onClick={() => setExpandedCard(f.title)}
-                        className={clsx(
-                            "rounded-[30px] cursor-pointer backdrop-blur-md p-[10px] mr-[50px]",
-                            f.bg,
-                            f.glow
-                        )}
-                        whileTap={{ scale: 0.98 }}
-                    >
-                      <motion.div layoutId={`icon-${f.title}`} className="mb-4 flex justify-center">
-                        <f.icon className="w-[50px] h-[50px] text-cyan-300" />
-                      </motion.div>
-                      <motion.h3
-                          layoutId={`title-${f.title}`}
-                          className="text-xl font-semibold mb-2 text-center"
+            {/* Left: Feature selection grid */}
+            {!expandedCard && (
+              <div className="w-1/2 flex items-center justify-center mx-[200px] mr-[400px] px-[40px]">
+                <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[80px]">
+                  {features.map((f) => (
+                      <motion.div
+                          key={f.title}
+                          layoutId={`card-${f.title}`}
+                          onClick={() => setExpandedCard(f.title)}
+                          className={clsx(
+                              "rounded-[30px] cursor-pointer backdrop-blur-md p-[10px] mr-[50px]",
+                              f.bg,
+                              f.glow
+                          )}
+                          whileTap={{ scale: 0.98 }}
                       >
-                        {f.title}
-                      </motion.h3>
-                    </motion.div>
-                ))}
+                        <motion.div layoutId={`icon-${f.title}`} className="mb-4 flex justify-center">
+                          <f.icon className="w-[50px] h-[50px] text-cyan-300" />
+                        </motion.div>
+                        <motion.h3
+                            layoutId={`title-${f.title}`}
+                            className="text-xl font-semibold mb-2 text-center"
+                        >
+                          {f.title}
+                        </motion.h3>
+                      </motion.div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Right column: overlay “canvas” for the expanded card */}
+            {/* Right: Expanded feature panel (canvas) */}
             <div className="w-1/2 relative flex items-center justify-center mx-[200px]">
               <AnimatePresence>
                 {expandedCard && (() => {
@@ -229,7 +259,7 @@ export default function ReviewDApp() {
                       <motion.div
                           layoutId={`card-${expandedCard}`}
                           className={clsx(
-                              "fixed inset-[7%] rounded-2xl z-10 p-8 flex flex-col items-center text-center",
+                              "fixed inset-[7%] rounded-2xl z-10 p-8 flex flex-col items-center text-center shadow-neon-cyan glass-animate-in min-h-[70vh] h-[80vh] justify-between",
                               f.bg,
                               f.glow,
                               "backdrop-blur-3xl"
@@ -238,68 +268,49 @@ export default function ReviewDApp() {
                           animate={{ opacity: 1 }}
                           exit={{ opacity: 0 }}
                       >
-                        {/* dark blurred background */}
-                        <div className="absolute inset-0 rounded-2xl bg-black/70 backdrop-blur-3xl" />
-                        <div className="relative z-10 w-full flex flex-col items-center">
-                          <motion.div layoutId={`icon-${expandedCard}`} className="mb-6 mt-[20px]">
-                            <f.icon className="w-[80px] h-[80px] text-cyan-300" />
-                          </motion.div>
-                          <motion.h3
-                              layoutId={`title-${expandedCard}`}
-                              className="text-3xl font-bold mb-4 text-white"
-                          >
-                            {expandedCard}
-                          </motion.h3>
-                          <motion.div
-                              layoutId={`content-${expandedCard}`}
-                              className="text-lg text-white/80 mb-8 px-4"
-                          >
-                            {f.description}
-                          </motion.div>
-                          {expandedCard === "Wallet & Access" && (
-                              <div className="flex flex-row w-full h-full items-center justify-center gap-16">
-                                {/* VC CARD - left */}
-                                <div className="flex-1 flex flex-col items-center justify-center rounded-2xl shadow-2xl p-8 max-w-md w-full">
-                                  <div className="bg-[lightskyblue] shadow-xl p-8 max-w-sm w-full flex flex-col items-center mb-6 border-2 border-cyan-400/50"
-                                        style={{ fontSize: "16px", color: "black", width: "60%", borderRadius: "24px" }}
-                                  >
-                                    <VCCard vc={vc} />
-                                    <button
-                                        onClick={() => window.location.href = "http://localhost:8082/login"}
-                                        className="rounded-full bg-cyan-500/30 text-cyan-900 border-cyan-400/70 hover:bg-cyan-400/30 transition-all"
-                                        style={{ margin: "auto", marginTop: "20px", padding: "10px", width: "120px", fontSize: "20px", fontWeight: "800" }}
-                                    >
-                                      Get VC
-                                    </button>
-                                  </div>
-                                </div>
-                                {/* DID TABLE - right */}
-                                <div className="flex-1 flex flex-col items-center justify-center">
-                                  <DIDTable
-                                      didEntries={didEntries}
-                                      onCreateDid={handleCreateDid}
-                                      onDownloadKey={handleDownloadKey}
-                                  />
-                                </div>
-                              </div>
-                          )}
-                          {expandedCard === "Signed Reviews" && (
-                              <button
-                                  onClick={loadReviewsFromIPFS}
-                                  className="mb-4 mt-[20px] px-8 py-4 rounded-full bg-cyan-500/20 text-cyan-300 border-cyan-300/30 hover:bg-cyan-400/20 transition-all duration-300 backdrop-blur-md animate-pulse hover:scale-105"
-                                  style={{ fontSize: "18px", fontWeight: "600" }}
-                              >
-                                Load Reviews
-                              </button>
-                          )}
-                          <motion.button
-                              onClick={() => setExpandedCard(null)}
-                              className="mx-[auto] my-[15px] px-6 py-3 rounded-full shadow-lg bg-cyan-500/20 border-cyan-300/30 hover:bg-cyan-400/20 transition animate-pulse hover:scale-105"
-                              style={{ fontSize: "20px", fontWeight: "600" }}
-                          >
-                            Close
-                          </motion.button>
+                        <div className="flex-1 w-full flex flex-col items-center">
+                          {/* Dark blurred background */}
+                          <div className="absolute inset-0 rounded-2xl bg-black/70 backdrop-blur-3xl" />
+                          <div className="relative z-10 w-full flex flex-col items-center">
+                            <motion.div layoutId={`icon-${expandedCard}`} className="mb-6 mt-[20px]">
+                              <f.icon className="w-[80px] h-[80px] text-cyan-300" />
+                            </motion.div>
+                            <motion.h3
+                                layoutId={`title-${expandedCard}`}
+                                className="text-3xl font-bold mb-4 text-white"
+                            >
+                              {expandedCard}
+                            </motion.h3>
+                            <motion.div
+                                layoutId={`content-${expandedCard}`}
+                                className="text-lg mb-8 px-4"
+                            >
+                              {f.description}
+                            </motion.div>
+                            {/* --- Feature-specific panel rendering --- */}
+                            {expandedCard === "Wallet & Access" && (
+                                <WalletAccessPanel
+                                    vc={vc}
+                                    didEntries={didEntries}
+                                    onCreateDid={handleCreateDid}
+                                    onDownloadKey={handleDownloadKey}
+                                />
+                            )}
+                            {expandedCard === "Signed Reviews" && (
+                                <SignedReviewsPanel wallet={wallet} />
+                            )}
+                            {expandedCard === "ZKP Reputation" && (
+                                <ZKPReputationPanel wallet={wallet} />
+                            )}
+                          </div>
                         </div>
+                        <motion.button
+                            onClick={() => setExpandedCard(null)}
+                            className="mx-[auto] mt-auto mb-2 mb-[20px] my-auto px-6 py-3 rounded-full shadow-lg bg-cyan-500/20 border-cyan-300/30 hover:bg-cyan-400/20 transition animate-pulse hover:scale-105"
+                            style={{ fontSize: "20px", fontWeight: "600" }}
+                        >
+                          Close
+                        </motion.button>
                       </motion.div>
                   );
                 })()}

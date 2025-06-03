@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2025 Emanuele Relmi
 
+/**
+ * VCCard
+ * Verifiable Credential display card
+ */
 export function VCCard({ vc }: { vc: any }) {
     if (!vc) return null;
     return (
-        <div className="w-full text-black">
-            <h2 className="text-2xl font-bold mb-3 text-cyan-900 text-center">Verifiable Credential</h2>
+        <div className="ml-auto w-auto min-h-[250px] min-w-[450px] h-auto text-[black] bg-gradient-to-tr from-[#b6e3ff] via-[#c9b6fc] to-[#ffc6e0] rounded-xl shadow-neon-cyan p-6 mb-6 border-2 border-cyan-400/30 glass-animate-in">
+            <h2 className="text-2xl font-bold mb-3 text-cyan-900 text-center drop-shadow-[0_0_8px_#00fff7]">Verifiable Credential</h2>
             <div className="mb-1">
                 <strong>Name:</strong> {vc.credentialSubject.name}
             </div>
@@ -17,8 +21,8 @@ export function VCCard({ vc }: { vc: any }) {
             </div>
             <div className="mt-2 text-xs text-gray-800">
                 <details>
-                    <summary>Show raw VC JSON</summary>
-                    <pre className="overflow-auto">{JSON.stringify(vc, null, 2)}</pre>
+                    <summary className="cursor-pointer text-cyan-800 hover:text-fuchsia-400">Show raw VC JSON</summary>
+                    <pre className="overflow-auto text-[15px]">{JSON.stringify(vc, null, 2)}</pre>
                 </details>
             </div>
         </div>
