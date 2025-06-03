@@ -4,19 +4,19 @@ pragma solidity ^0.8.20;
 
 contract RevocationRegistry {
     string public revocationListCID;
-    address public issuerDID;
+    string public issuerDID;
 
     /// @dev Event emitted when the revocation list is updated
     event RevocationListUpdated(string newCID);
 
-    /// @dev Modifier to restrict access to the issuer
+    /// @dev Modifier to restrict access to the Issuer
     modifier onlyIssuer(string memory did) {
         require(_compareDID(did, issuerDID), "Not Issuer");
         _;
     }
 
-    /// @dev Constructor to set the issuer address
-    constructor(address _issuerDID) {
+    /// @dev Constructor to set the Issuer DID
+    constructor(string memory _issuerDID) {
         issuerDID = _issuerDID;
     }
 

@@ -3,6 +3,7 @@
 
 /**
  * Deploy script for the ReviewManager contract.
+ * Assigns MODERATOR_ROLE to deployer.
  * Loads all dependency contract addresses from contract-addresses.json.
  * Deploys ReviewManager and saves its address for further deployments.
  */
@@ -12,6 +13,7 @@ const path = require("path");
 const { ethers } = require("hardhat");
 
 async function main() {
+    const [deployer] = await ethers.getSigners();
     const filePath = path.join(__dirname, "../contract-addresses.json");
     const addresses = JSON.parse(fs.readFileSync(filePath, "utf8"));
 
@@ -41,6 +43,11 @@ async function main() {
     );
 
     console.log("✅ ReviewManager deployed to:", manager.target);
+
+    // Assign MODERATOR_ROLE to the deployer
+    const MODERATOR_ROLE = ethers.keccak256(ethers.toUtf8Bytes("MODERATOR_ROLE"));
+    const tx = await manager.grantRole(MODERATOR_ROLE, deployer.address);
+    await tx.wait();
 
     // Save the contract address to JSON file
     addresses.ReviewManager = manager.target;

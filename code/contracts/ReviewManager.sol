@@ -42,8 +42,8 @@ contract ReviewManager is AccessControl {
         address _bbsVerifier,
         address _semaphoreVerifier
     ) {
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _setupRole(MODERATOR_ROLE, msg.sender);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(MODERATOR_ROLE, msg.sender);
 
         reviewNFT = ReviewNFT(_reviewNFT);
         badgeNFT = BadgeNFT(_badgeNFT);
@@ -76,7 +76,7 @@ contract ReviewManager is AccessControl {
 
     /// @dev Function to edit a review
     function editReview(string memory did, uint256 reviewId, string memory newCID) external notBanned(did) {
-        require(reviewStorage.isOwner(msg.sender, reviewId), "Not owner of review");
+        require(reviewStorage.isOwner(did, reviewId), "Not owner of review");
         require(block.timestamp >= lastEdit[reviewId] + cooldownTime, "Cooldown in progress");
 
         reviewStorage.updateReview(reviewId, newCID, did);
@@ -87,7 +87,7 @@ contract ReviewManager is AccessControl {
 
     /// @dev Function to revoke a review
     function revokeReview(string memory did, uint256 reviewId) external notBanned(did) {
-        require(reviewStorage.isOwner(msg.sender, reviewId), "Not owner of review");
+        require(reviewStorage.isOwner(did, reviewId), "Not owner of review");
         reviewStorage.revokeReview(reviewId, did);
         emit ReviewRevoked(reviewId);
     }

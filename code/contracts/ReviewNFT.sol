@@ -3,9 +3,9 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract ReviewNFT is ERC721URIStorage, Ownable {
+contract ReviewNFT is ERC721URIStorage, AccessControl {
     enum Status { Valid, Used, Expired }
 
     struct ReviewToken {
@@ -17,6 +17,7 @@ contract ReviewNFT is ERC721URIStorage, Ownable {
 
     uint256 public constant EXPIRATION_TIME = 60 days;
     uint256 private _tokenIds;
+    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
     /// @dev Mapping from token ID to ReviewToken
     mapping(uint256 => ReviewToken) public reviewTokens;
@@ -27,10 +28,13 @@ contract ReviewNFT is ERC721URIStorage, Ownable {
     event NFTUsed(uint256 indexed tokenId, string indexed did);
     event NFTExpired(uint256 indexed tokenId, string indexed did);
 
-    constructor() ERC721("ProofOfPurchaseNFT", "PoP") {}
+    constructor() ERC721("ProofOfPurchaseNFT", "PoP") {
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(MINTER_ROLE, msg.sender);
+    }
 
     /// @dev Function to mint a new NFT
-    function mintNFT(string memory did, uint256 productId, string memory tokenURI) external onlyOwner returns (uint256) {
+    function mintNFT(string memory did, uint256 productId, string memory tokenURI) external onlyRole(MINTER_ROLE) returns (uint256) {
         _tokenIds++;
         uint256 newTokenId = _tokenIds;
 
@@ -66,7 +70,7 @@ contract ReviewNFT is ERC721URIStorage, Ownable {
             uint256 tokenId = tokenIds[i];
             if (reviewTokens[tokenId].status == Status.Valid && _isExpired(tokenId)) {
                 reviewTokens[tokenId].status = Status.Expired;
-                emit NFTExpired(tokenId);
+                emit NFTExpired(tokenId, reviewTokens[tokenId].did);
             }
         }
     }
@@ -108,17 +112,22 @@ contract ReviewNFT is ERC721URIStorage, Ownable {
     }
 
     /// @dev Override transfer functions to prevent transfers (soulbound)
-    function _transfer(address from, address to, uint256 tokenId) internal pure override {
+    function _transfer(address /*from*/, address /*to*/, uint256 /*tokenId*/) internal pure override {
         revert("Soulbound: non-transferable");
     }
 
     /// @dev Override approval functions to prevent approvals (soulbound)
-    function approve(address to, uint256 tokenId) public pure override {
+    function approve(address /*to*/, uint256 /*tokenId*/) public pure override(ERC721, IERC721) {
         revert("Soulbound: non-transferable");
     }
 
     /// @dev Override setApprovalForAll to prevent approvals (soulbound)
-    function setApprovalForAll(address operator, bool approved) public pure override {
+    function setApprovalForAll(address /*operator*/, bool /*approved*/) public pure override(ERC721, IERC721) {
         revert("Soulbound: non-transferable");
+    }
+
+    /// @dev Override supportsInterface to include both ERC721URIStorage and AccessControl interfaces
+    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC721URIStorage, AccessControl) returns (bool) {
+        return super.supportsInterface(interfaceId);
     }
 }

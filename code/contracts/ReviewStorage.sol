@@ -16,7 +16,7 @@ contract ReviewStorage {
 
     uint256 public nextReviewId;
     mapping(uint256 => Review) public reviews;
-    mapping(address => uint256[]) public reviewsByAuthorDID;
+    mapping(string => uint256[]) public reviewsByAuthorDID;
 
     event ReviewStored(uint256 indexed reviewId, string indexed authorDID, string ipfsCID);
     event ReviewUpdated(uint256 indexed reviewId, string newCID);
