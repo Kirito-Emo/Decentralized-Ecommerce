@@ -2,9 +2,9 @@
 // Copyright 2025 Emanuele Relmi
 
 /**
- * Deploy script for the SemaphoreVerifier smart contract.
+ * Deploy script for the SemaphoreVerifier smart contract
  * Saves contract address in contract-addresses.json
- * Ethers.js v6, Hardhat, Ganache localhost:8545.
+ * Ethers.js v6, Hardhat, Ganache localhost:8545
  */
 
 const fs = require("fs");
@@ -12,6 +12,7 @@ const path = require("path");
 const { ethers } = require("hardhat");
 
 async function main() {
+    // Deploy SemaphoreVerifier
     const SemaphoreVerifier = await ethers.getContractFactory("SemaphoreVerifier");
     const semaphoreVerifier = await SemaphoreVerifier.deploy();
 

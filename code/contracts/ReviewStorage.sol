@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2025 Emanuele Relmi
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.25;
+
+import "./BanRegistry.sol";
 
 contract ReviewStorage {
+    /// @dev Reference to the BanRegistry contract
+    BanRegistry public banRegistry;
+
     struct ReviewVersion {
         string ipfsCID;
         uint256 timestamp; // Timestamp rounded to day to prevent correlation
@@ -22,8 +27,19 @@ contract ReviewStorage {
     event ReviewUpdated(uint256 indexed reviewId, string newCID);
     event ReviewRevoked(uint256 indexed reviewId);
 
+    /// @dev Initialize the contract with a reference to the BanRegistry
+    constructor(address _banRegistry) {
+        banRegistry = BanRegistry(_banRegistry);
+    }
+
+    /// @dev Modifier to check if a DID is not banned
+    modifier notBanned(string memory did) {
+        require(!banRegistry.isBanned(did), "DID is banned");
+        _;
+    }
+
     /// @dev Store a new review and return its unique ID
-    function storeReview(string memory authorDID, string memory ipfsCID) external returns (uint256) {
+    function storeReview(string memory authorDID, string memory ipfsCID) external notBanned(authorDID) returns (uint256) {
         uint256 reviewId = nextReviewId++;
         reviews[reviewId].authorDID = authorDID;
         reviews[reviewId].revoked = false;
@@ -35,7 +51,7 @@ contract ReviewStorage {
     }
 
     /// @dev Update the IPFS CID for an existing review
-    function updateReview(uint256 reviewId, string memory newCID, string memory did) external {
+    function updateReview(uint256 reviewId, string memory newCID, string memory did) external notBanned(did) {
         require(_compareDID(reviews[reviewId].authorDID, did), "Not the author");
         require(!reviews[reviewId].revoked, "Review is revoked");
 
@@ -44,7 +60,7 @@ contract ReviewStorage {
     }
 
     /// @dev Revoke a review permanently
-    function revokeReview(uint256 reviewId, string memory did) external {
+    function revokeReview(uint256 reviewId, string memory did) external notBanned(did) {
         require(_compareDID(reviews[reviewId].authorDID, did), "Not the author");
         require(!reviews[reviewId].revoked, "Already revoked");
 

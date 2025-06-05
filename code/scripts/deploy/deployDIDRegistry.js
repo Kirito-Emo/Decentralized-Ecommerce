@@ -2,31 +2,28 @@
 // Copyright 2025 Emanuele Relmi
 
 /**
- * Deploy script for the VCRegistry contract
- * The deployer is set as first trusted issuer
- * Saves the deployed contract address in contract-addresses.json
+ * Deploy script for the DIDRegistry contract
+ * Saves contract address in contract-addresses.json for further deployments
  * Ethers.js v6, Hardhat, Ganache localhost:8545
  */
 
+const { ethers } = require("hardhat");
 const fs = require("fs");
 const path = require("path");
-const { ethers } = require("hardhat");
 
 async function main() {
-    // Deploy VCRegistry
-    const VCRegistry = await ethers.getContractFactory("VCRegistry");
-    const vcRegistry = await VCRegistry.deploy();
+    const DIDRegistry = await ethers.getContractFactory("DIDRegistry");
+    const didRegistry = await DIDRegistry.deploy();
 
-    console.log("✅ VCRegistry deployed to:", vcRegistry.target);
+    console.log("✅ DIDRegistry deployed to:", didRegistry.target);
 
-    // Save the contract address to JSON file
+    // Save contract address
     const filePath = path.join(__dirname, "../contract-addresses.json");
     let addresses = {};
     if (fs.existsSync(filePath)) {
         addresses = JSON.parse(fs.readFileSync(filePath, "utf8"));
     }
-    addresses.VCRegistry = vcRegistry.target;
-
+    addresses.DIDRegistry = didRegistry.target;
     fs.writeFileSync(filePath, JSON.stringify(addresses, null, 2));
 }
 

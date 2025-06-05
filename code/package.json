@@ -5,10 +5,16 @@
     "hardhat": "^2.24.0"
   },
   "dependencies": {
+    "@semaphore-protocol/contracts": "^4.11.1",
     "axios": "^1.9.0",
+    "crypto": "^1.0.1",
+    "did-jwt-vc": "^4.0.14",
+    "did-resolver": "^4.1.0",
     "ethers": "^6.14.3",
+    "ethr-did": "^3.0.36",
+    "ethr-did-resolver": "^11.0.3",
     "form-data": "^4.0.2",
-    "solc": "^0.8.20",
+    "solc": "^0.8.25",
     "web3": "^4.16.0"
   }
 }

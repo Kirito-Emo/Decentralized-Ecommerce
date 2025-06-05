@@ -13,10 +13,9 @@ import { NFTSelector } from "../components/SignedReviews/NFTSelector";
 import { ReviewEditor } from "../components/SignedReviews/ReviewEditor";
 import { create as ipfsHttpClient } from "ipfs-http-client";
 import { ethers } from "ethers";
-import contractAddresses from "../abi/contract-addresses.json";
-import BadgeNFT from "../abi/BadgeNFT.json";
-import ReviewNFT from "../abi/ReviewNFT.json";
-import ReviewManager from "../abi/ReviewManager.json";
+import contractAddresses from "../../../scripts/contract-addresses.json";
+import BadgeNFT from "../../../artifacts/contracts/BadgeNFT.sol/BadgeNFT.json";
+import ReviewManager from "../../../artifacts/contracts/ReviewManager.sol/ReviewManager.json";
 
 const glass = "bg-[white]/10 shadow-neon-cyan backdrop-blur-xl border border-white/20 glass-animate-in";
 

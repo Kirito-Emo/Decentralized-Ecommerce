@@ -2,8 +2,8 @@
 // Part of this file was generated with [snarkJS](https://github.com/iden3/snarkjs).
 pragma solidity ^0.8.20;
 
-import {MAX_DEPTH} from "./Constants.sol";
-import {SemaphoreVerifierKeyPts} from "./SemaphoreVerifierKeyPts.sol";
+import {MAX_DEPTH} from "./library/Constants.sol";
+import {SemaphoreVerifierKeyPts} from "./library/SemaphoreVerifierKeyPts.sol";
 
 contract SemaphoreVerifier {
     // Scalar field size

@@ -6,6 +6,7 @@
 /code/package-lock.json
 /code/node_modules/
 /code/scripts/contract-addresses.json
+/code/scripts/interact/fetchDID.js
 
 /code/frontend/package-lock.json
 /code/frontend/node_modules/

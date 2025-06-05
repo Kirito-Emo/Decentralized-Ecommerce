@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2025 Emanuele Relmi
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.25;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "./BanRegistry.sol";
 
 contract ReviewNFT is ERC721URIStorage, AccessControl {
     enum Status { Valid, Used, Expired }
+
+    /// @dev BanRegistry instance to check if a DID is banned
+    BanRegistry public banRegistry;
 
     struct ReviewToken {
         string did;
@@ -21,6 +25,7 @@ contract ReviewNFT is ERC721URIStorage, AccessControl {
 
     /// @dev Mapping from token ID to ReviewToken
     mapping(uint256 => ReviewToken) public reviewTokens;
+
     /// @dev Mapping from DID to array of token IDs
     mapping(string => uint256[]) public didToTokenIds;
 
@@ -28,13 +33,21 @@ contract ReviewNFT is ERC721URIStorage, AccessControl {
     event NFTUsed(uint256 indexed tokenId, string indexed did);
     event NFTExpired(uint256 indexed tokenId, string indexed did);
 
-    constructor() ERC721("ProofOfPurchaseNFT", "PoP") {
+    /// @dev Constructor to initialize the contract and set roles and ban registry
+    constructor(address _banRegistry) ERC721("ProofOfPurchaseNFT", "PoP") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(MINTER_ROLE, msg.sender);
+        banRegistry = BanRegistry(_banRegistry);
+    }
+
+    /// @dev Modifier to check if a DID is not banned
+    modifier notBanned(string memory did) {
+        require(!banRegistry.isBanned(did), "DID is banned");
+        _;
     }
 
     /// @dev Function to mint a new NFT
-    function mintNFT(string memory did, uint256 productId, string memory tokenURI) external onlyRole(MINTER_ROLE) returns (uint256) {
+    function mintNFT(string memory did, uint256 productId, string memory tokenURI) external onlyRole(MINTER_ROLE) notBanned(did) returns (uint256) {
         _tokenIds++;
         uint256 newTokenId = _tokenIds;
 
@@ -54,7 +67,7 @@ contract ReviewNFT is ERC721URIStorage, AccessControl {
     }
 
     /// @dev Function to use the NFT, marking it as used
-    function useNFT(uint256 tokenId, string memory did) external {
+    function useNFT(uint256 tokenId, string memory did) external notBanned(did) {
         require(_isTokenOwnedByDID(tokenId, did), "Not NFT owner");
         require(reviewTokens[tokenId].status == Status.Valid, "NFT not valid");
         require(!_isExpired(tokenId), "NFT expired");

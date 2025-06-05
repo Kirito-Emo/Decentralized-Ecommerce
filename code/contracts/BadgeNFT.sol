@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache 2.0
 // Copyright 2025 Emanuele Relmi
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.25;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "./BanRegistry.sol";
 
 /**
  * @title BadgeNFT
@@ -12,6 +13,9 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
  */
 contract BadgeNFT is ERC721URIStorage, AccessControl {
     enum BadgeLevel { None, Bronze, Silver, Gold }
+
+    /// @dev BanRegistry instance to check if a DID is banned
+    BanRegistry public banRegistry;
 
     mapping(string => BadgeLevel) private badgeLevel;
     mapping(string => uint256) public lastUpdate;
@@ -25,13 +29,21 @@ contract BadgeNFT is ERC721URIStorage, AccessControl {
     event BadgeMinted(string indexed did, BadgeLevel level);
     event BadgeUpgraded(string indexed did, BadgeLevel newLevel);
 
-    constructor() ERC721("ReviewerBadge", "RBDG") {
+    /// @dev Constructor to initialize the contract and set roles
+    constructor(address _banRegistry) ERC721("ReviewerBadge", "RBDG") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(REPUTATION_UPDATER_ROLE, msg.sender);
+        banRegistry = BanRegistry(_banRegistry);
+    }
+
+    /// @dev Modifier to check if a DID is not banned
+    modifier notBanned(string memory did) {
+        require(!banRegistry.isBanned(did), "DID is banned");
+        _;
     }
 
     /// @dev Update reputation for a DID
-    function updateReputation(string memory did, int256 delta) external onlyRole(REPUTATION_UPDATER_ROLE) {
+    function updateReputation(string memory did, int256 delta) external onlyRole(REPUTATION_UPDATER_ROLE) notBanned(did) {
         if (delta >= 0) {
             reputation[did] += uint256(delta);
         } else {

@@ -1,59 +1,82 @@
 // SPDX-License-Identifier: Apache 2.0
 // Copyright 2025 Emanuele Relmi
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.25;
 
+/// @title VCRegistry - Verifiable Credential Registry with DID support and trusted issuer control
+/// @notice This contract anchors on-chain the hashes of Verifiable Credentials (VCs) issued off-chain
+///         Only addresses whitelisted as "trusted issuers" can register or revoke VC hashes
+///         For each VC hash, the registry stores: issuer (address + DID), subject DID, timestamp, and revocation status
+///         No personal data or cleartext attributes are ever stored; only minimal audit and compliance data
 contract VCRegistry {
-    string public issuerDID;
-
-    mapping(bytes32 => bool) public commitmentUsed;
-    mapping(bytes32 => bool) public revoked;
-    mapping(bytes32 => string) public vcHolder;
-
-    event CommitmentRegistered(bytes32 indexed commitment, string indexed holderDID);
-    event VCRevoked(bytes32 indexed vcHash);
-
-    /// @dev Constructor to set the issuer DID
-    constructor(string memory _issuerDID) {
-        issuerDID = _issuerDID;
+    /// @dev Structure for each VC registration entry
+    struct VCRecord {
+        address issuer;         // Ethereum address of the issuer (on-chain authority)
+        string issuerDID;       // DID of the issuer (for cross-chain or off-chain verification)
+        string subjectDID;      // DID of the credential subject
+        uint256 timestamp;      // Registration timestamp (block.time)
+        bool revoked;           // Revocation status (false=valid, true=revoked)
     }
 
-    /// @dev Modifier to restrict access to the issuer
-    modifier onlyIssuer(string memory did) {
-        require(_compareDID(did, issuerDID), "Not issuer");
+    /// @dev Maps VC hash to its registration record
+    mapping(bytes32 => VCRecord) public registry;
+
+    /// @dev Maps address to trusted issuer status
+    mapping(address => bool) public trustedIssuer;
+
+    /// @dev Events for monitoring registry actions
+    event VCRegistered(bytes32 indexed vcHash, address indexed issuer, string issuerDID, string subjectDID, uint256 timestamp);
+    event VCRevoked(bytes32 indexed vcHash, address indexed issuer, uint256 timestamp);
+    event TrustedIssuerSet(address indexed issuer, bool enabled);
+
+    /// @dev Restricts access to only trusted issuers
+    modifier onlyTrustedIssuer() {
+        require(trustedIssuer[msg.sender], "Not a trusted issuer");
         _;
     }
 
-    /// @dev Register hash VC or nullifier and its holder DID
-    function registerCommitment(bytes32 commitment, string calldata holderDID) external {
-        require(!commitmentUsed[commitment], "Already used");
-        commitmentUsed[commitment] = true;
-        vcHolder[commitment] = holderDID;
-        emit CommitmentRegistered(commitment, holderDID);
+    /// @dev The deployer is set as the first trusted issuer
+    constructor() {
+        trustedIssuer[msg.sender] = true;
+        emit TrustedIssuerSet(msg.sender, true);
     }
 
-    /// @dev Check if a commitment is already registered
-    function isRegistered(bytes32 commitment) external view returns (bool) {
-        return commitmentUsed[commitment];
+    /// @dev Set or unset a trusted issuer
+    function setTrustedIssuer(address issuer, bool enabled) external onlyTrustedIssuer {
+        trustedIssuer[issuer] = enabled;
+        emit TrustedIssuerSet(issuer, enabled);
     }
 
-    /// @dev Check if a VC has been revoked
-    function isRevoked(bytes32 vcHash) external view returns (bool) {
-        return revoked[vcHash];
+    /// @dev Registers a new VC hash anchored on-chain
+    function registerVC(bytes32 vcHash, string calldata issuerDID, string calldata subjectDID) external onlyTrustedIssuer {
+        require(registry[vcHash].timestamp == 0, "VC already registered");
+        registry[vcHash] = VCRecord({
+            issuer: msg.sender,
+            issuerDID: issuerDID,
+            subjectDID: subjectDID,
+            timestamp: block.timestamp,
+            revoked: false
+        });
+        emit VCRegistered(vcHash, msg.sender, issuerDID, subjectDID, block.timestamp);
     }
 
-    /// @dev Check if a VC has been revoked
-    function revokeVC(bytes32 vcHash, string calldata did) external onlyIssuer(did) {
-        revoked[vcHash] = true;
-        emit VCRevoked(vcHash);
+    /// @dev Revokes a registered VC
+    function revokeVC(bytes32 vcHash) external onlyTrustedIssuer {
+        VCRecord storage rec = registry[vcHash];
+        require(rec.timestamp != 0, "VC not registered");
+        require(rec.issuer == msg.sender, "Only the issuer can revoke");
+        require(!rec.revoked, "VC already revoked");
+        rec.revoked = true;
+        emit VCRevoked(vcHash, msg.sender, block.timestamp);
     }
 
-    /// @dev Get the holder DID of a VC (hash)
-    function getHolderDID(bytes32 commitment) external view returns (string memory) {
-        return vcHolder[commitment];
+    /// @dev Checks if the VC hash is registered and not revoked
+    function isValid(bytes32 vcHash) external view returns (bool valid) {
+        VCRecord storage rec = registry[vcHash];
+        valid = (rec.timestamp != 0 && !rec.revoked);
     }
 
-    /// @dev Safe string compare for DID
-    function _compareDID(string memory a, string memory b) internal pure returns (bool) {
-        return (keccak256(bytes(a)) == keccak256(bytes(b)));
+    /// @dev Returns all details of a VC hash
+    function getVC(bytes32 vcHash) external view returns (VCRecord memory record) {
+        record = registry[vcHash];
     }
 }
