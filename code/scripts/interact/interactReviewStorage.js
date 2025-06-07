@@ -2,90 +2,61 @@
 // Copyright 2025 Emanuele Relmi
 
 /**
- * Interact script for ReviewStorage contract.
- * - Uploads two versions of a review to local IPFS Desktop.
- * - Stores, updates, and revokes the review on-chain for a demo DID.
- * - Prints the full review history and latest version details.
- *
- * Requirements:
- * - IPFS Desktop running locally (http://localhost:5001)
- * - review.txt and review_modified.txt created in the scripts/interact/ directory.
- * - DID must be consistent with your demo user logic.
+ * ReviewStorage interaction script
+ * - Uploads review text to IPFS (IPFS Desktop API on localhost:5001)
+ * - Stores review for a real holder DID
+ * - Updates the review with a second version (new content, new IPFS CID)
+ * Technologies: Hardhat, ethers v6, Ganache (localhost:8545), ipfs-http-client
  */
 
+const { ethers } = require("hardhat");
 const fs = require("fs");
 const path = require("path");
-const axios = require("axios");
-const FormData = require("form-data");
-const { ethers } = require("hardhat");
+const { create } = require("ipfs-http-client");
 
-async function uploadToIPFS(filePath) {
-    const form = new FormData();
-    form.append("file", fs.createReadStream(filePath));
-    const res = await axios.post("http://localhost:5001/api/v0/add", form, {
-        headers: form.getHeaders(),
-        maxBodyLength: Infinity,
-    });
-
-    let data = res.data;
-    if (typeof data === "string") {
-        const lines = data.trim().split("\n");
-        data = JSON.parse(lines[lines.length - 1]);
-    }
-
-    return data.Hash;
-}
+// Load holder DID
+const holder = JSON.parse(fs.readFileSync(path.join(__dirname, "holder-did.json"), "utf8"));
+const holderDID = holder.did;
 
 async function main() {
-    const did = "did:web:localhost8082:ema"; // Mock DID
-    const addresses = JSON.parse(fs.readFileSync(path.join(__dirname, "../contract-addresses.json"), "utf8"));
-    const reviewStorage = await ethers.getContractAt("ReviewStorage", addresses.ReviewStorage);
+    // Set up IPFS client (IPFS Desktop, default API port 5001)
+    const ipfs = create({ url: "http://localhost:5001" });
 
-    // Upload first version of the review to IPFS
-    const originalFile = path.join(__dirname, "review.txt");
-    if (!fs.existsSync(originalFile)) fs.writeFileSync(originalFile, "This is the original review on IPFS.");
-    const cid1 = await uploadToIPFS(originalFile);
-    console.log("✅ CID: ", cid1);
+    // Review text v1
+    const reviewText1 = "This is my first honest review, uploaded to IPFS!";
+    const { cid: cid1 } = await ipfs.add({ content: reviewText1 });
+    const ipfsCID1 = cid1.toString();
+    console.log("✅ Review v1 uploaded to IPFS:", ipfsCID1);
 
-    // Store review on-chain
-    const tx1 = await reviewStorage.storeReview(did, `ipfs://${cid1}`);
-    const receipt1 = await tx1.wait();
-    const iface = reviewStorage.interface;
-    const log = receipt1.logs
-        .map(l => {
-            try { return iface.parseLog(l); } catch { return null; }
-        })
-        .find(e => e && e.name === "ReviewStored");
-    if (!log) throw new Error("ReviewStored event not found!");
-    const reviewId = log.args.reviewId;
-    console.log("📝 Review saved with ID: ", reviewId.toString());
+    // Load ReviewStorage contract address
+    const filePath = path.join(__dirname, "../contract-addresses.json");
+    const addresses = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    const ReviewStorage = await ethers.getContractAt("ReviewStorage", addresses.ReviewStorage);
 
-    // Upload second (modified) version of the review to IPFS
-    const modifiedFile = path.join(__dirname, "review_modified.txt");
-    fs.writeFileSync(modifiedFile, "This is the modified review on IPFS.");
-    const cid2 = await uploadToIPFS(modifiedFile);
-    console.log("✏️ CID modified: ", cid2);
+    // Store the review on-chain
+    let tx = await ReviewStorage.storeReview(holderDID, ipfsCID1);
+    let receipt = await tx.wait();
 
-    // Update review on-chain
-    const tx2 = await reviewStorage.updateReview(reviewId, `ipfs://${cid2}`, did);
-    await tx2.wait();
-    console.log("✅ Review modified.");
+    // Find ReviewStored event for reviewId
+    const event = receipt.logs.find(log => log.fragment && log.fragment.name === "ReviewStored");
+    const reviewId = event ? event.args.reviewId : null;
+    console.log(`✅ Review stored for DID ${holderDID} with reviewId ${reviewId}`);
 
-    // Revoke review on-chain
-    const tx3 = await reviewStorage.revokeReview(reviewId, did);
-    await tx3.wait();
-    console.log("🚫 Review revoked.");
+    // Review text v2
+    const reviewText2 = "This is my UPDATED review, with better insights. Still on IPFS!";
+    const { cid: cid2 } = await ipfs.add({ content: reviewText2 });
+    const ipfsCID2 = cid2.toString();
+    console.log("✅ Review v2 uploaded to IPFS:", ipfsCID2);
 
-    // Fetch full review history
-    const history = await reviewStorage.getHistory(reviewId);
-    console.log("\n📚 Review history: ");
-    history.forEach((entry, idx) => {
-        console.log(` ${idx + 1}. CID: ${entry.ipfsCID} | Data: ${new Date(Number(entry.timestamp) * 1000).toLocaleString()}`);
-    });
-
-    // Print current state
-    const [lastCID, isRevoked, lastUpdate] = await reviewStorage.getLatestReview(reviewId);
-    console.log(`\n📌 Last version:\n CID: ${lastCID}\n Revoked: ${isRevoked}\n Timestamp: ${new Date(Number(lastUpdate) * 1000).toLocaleString()}`);
+    // Update the review on-chain
+    if (reviewId !== null) {
+        tx = await ReviewStorage.updateReview(reviewId, ipfsCID2, holderDID);
+        await tx.wait();
+        console.log(`✅ Review updated for reviewId ${reviewId}`);
+    }
 }
 
-main().catch(console.error);
+main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+});

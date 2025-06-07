@@ -18,7 +18,7 @@ app.get("/login", (_req, res) => {
     <html lang="it">
       <body>
         <form method="POST" action="http://localhost:8443/sso">
-          <input type="submit" value="Login with Mock IdP" />
+          <input type="submit" value="Login with SPID" />
         </form>
       </body>
     </html>

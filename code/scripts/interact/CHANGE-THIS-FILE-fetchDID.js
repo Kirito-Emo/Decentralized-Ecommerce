@@ -1,47 +1,45 @@
-// SPDX-License-Identifier: Apache 2.0
+// SPDX-License-Identifier: Apache-2.0
 // Copyright 2025 Emanuele Relmi
 
 /**
- * Derive two real Ethereum accounts from Ganache mnemonic, create a real issuer DID and holder DID, save info for later use
+ * Derive 4 real Ethereum accounts from Ganache mnemonic, create 2 real issuer DIDs and 2 holder DIDs, save info for later use
  */
 
-const { ethers } = require("ethers");
+const { HDNodeWallet } = require("ethers");
 const { EthrDID } = require("ethr-did");
-const fs = require("fs");
+const fs= require("fs");
 const path = require("path");
 
-// !!! Never commit this to git !!! (add to .gitignore)
-const GANACHE_MNEMONIC = "YOUR GANACHE MNEMONIC HERE"; // Replace with your mnemonic!
+// === Ganache ===
+const MNEMONIC = "YOUR_GANACHE_MNEMONIC_HERE"; // Replace with your Ganache mnemonic
+const ACCOUNT_PATH = "44'/60'/0'/0";
 
+// Master at depth 0
+const master = HDNodeWallet.fromPhrase(MNEMONIC, "", "m");
+
+// === EthrDID ===
 async function main() {
-    // Derive issuer (index 0) and holder (index 1)
-    for (let accountIndex of [0, 1]) {
-        const wallet = ethers.Wallet.fromPhrase(
-            GANACHE_MNEMONIC,
-            `m/44'/60'/0'/0/${accountIndex}`
-        );
+    // Derive 4 accounts from the master wallet and create DIDs (2 issuers, 2 holders)
+    ["issuer", "holder", "issuer2", "holder2"].forEach((role, i) => {
+        const wallet = master.derivePath(`${ACCOUNT_PATH}/${i}`);
+        console.log(`${role} address: ${wallet.address}`);
 
         const did = new EthrDID({
             identifier: wallet.address,
             privateKey: wallet.privateKey,
         });
 
-        const role = accountIndex === 0 ? "issuer" : "holder";
-        console.log(`Derived ${role} address:`, wallet.address);
-        console.log(`${role} DID:`, did.did);
-
-        // Save info for later scripts
         const out = {
-            address: wallet.address,
+            address:    wallet.address,
             privateKey: wallet.privateKey,
-            did: did.did,
+            did:        did.did,
         };
         fs.writeFileSync(
             path.join(__dirname, `${role}-did.json`),
             JSON.stringify(out, null, 2)
         );
         console.log(`✅ ${role}-did.json created`);
-    }
+    });
 }
 
 main().catch(console.error);

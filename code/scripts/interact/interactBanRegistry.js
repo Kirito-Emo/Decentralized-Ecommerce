@@ -27,8 +27,22 @@ async function main() {
     }
     const BanRegistry = await ethers.getContractAt("BanRegistry", addresses.BanRegistry);
 
+    // Grant permission to the BanRegistry contract
+    const [deployer] = await ethers.getSigners();
+    let tx = await BanRegistry.changeOwner(deployer.address);
+    await tx.wait();
+
+    // Check initial ban status (expected to be false)
+    const initialBanStatus = await BanRegistry.isDIDBanned(holderDID);
+    console.log(`Initial ban status for ${holderDID}:`, initialBanStatus);
+    if (initialBanStatus) {
+        console.warn(`Warning: Holder DID ${holderDID} is already banned.`);
+    } else {
+        console.log(`Holder DID ${holderDID} is not banned, proceeding with ban/unban operations.`);
+    }
+
     // Ban the holder DID
-    let tx = await BanRegistry.banUser(holderDID);
+    tx = await BanRegistry.banUser(holderDID);
     await tx.wait();
     console.log(`✅ Holder DID ${holderDID} has been banned.`);
 
