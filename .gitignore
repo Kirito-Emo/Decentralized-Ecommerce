@@ -7,6 +7,18 @@
 /code/node_modules/
 /code/scripts/contract-addresses.json
 /code/scripts/interact/fetchDID.js
+/code/scripts/interact/issuer-did.json
+/code/scripts/interact/issuer2-did.json
+/code/scripts/interact/holder-did.json
+/code/scripts/interact/holder2-did.json
+/code/scripts/interact/sd-vp.jwt
+/code/scripts/interact/SD-VP_attestation.json
+/code/scripts/interact/vp.jwt
+/code/scripts/interact/VP_attestation.json
+/code/scripts/interact/bbs_attestation.json
+/code/scripts/interact/semaphore_attestation.json
+/code/scripts/interact/Semaphore/semaphore.wasm
+/code/scripts/interact/Semaphore/semaphore.zkey
 
 /code/frontend/package-lock.json
 /code/frontend/node_modules/

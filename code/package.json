@@ -5,7 +5,9 @@
     "hardhat": "^2.24.0"
   },
   "dependencies": {
+    "@mattrglobal/bbs-signatures": "^2.0.0",
     "@semaphore-protocol/contracts": "^4.11.1",
+    "@semaphore-protocol/core": "^4.11.1",
     "axios": "^1.9.0",
     "crypto": "^1.0.1",
     "did-jwt-vc": "^4.0.14",

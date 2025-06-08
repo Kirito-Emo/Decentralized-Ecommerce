@@ -2,46 +2,51 @@
 // Copyright 2025 Emanuele Relmi
 
 /**
- * Interact script for ReviewNFT contract.
- * Mints a new NFT and prints its status as a string (Valid/Used/Expired).
+ * ReviewNFT interaction script
+ * - Mints a soulbound NFT for a holder DID, linked to a productId and review (IPFS CID)
+ * - Uses the NFT (marks as used)
+ * Technologies: Hardhat, ethers v6, Ganache (localhost:8545)
  */
 
+const { ethers } = require("hardhat");
 const fs = require("fs");
 const path = require("path");
-const { ethers } = require("hardhat");
+
+// Load holder DID and the latest review CID from previous step
+const holder = JSON.parse(fs.readFileSync(path.join(__dirname, "holder-did.json"), "utf8"));
+const holderDID = holder.did;
+
+// Load the review CID just used (assume from last run of ReviewStorage script)
+const reviewCIDs = [ ];
+// For demo, use placeholder:
+const ipfsCID = "Qm..."
+
+const productId = 42;
 
 async function main() {
-    const did = "did:web:localhost8443:ema"; // Mock DID to use
-    const addresses = JSON.parse(fs.readFileSync(path.join(__dirname, "../contract-addresses.json"), "utf8"));
-    const reviewNFT = await ethers.getContractAt("ReviewNFT", addresses.ReviewNFT);
+    // Load ReviewNFT contract address
+    const filePath = path.join(__dirname, "../contract-addresses.json");
+    const addresses = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    const ReviewNFT = await ethers.getContractAt("ReviewNFT", addresses.ReviewNFT);
 
-    // Mint NFT for productId 101 with mock URI
-    const tx = await reviewNFT.mintNFT(did, 101, "ipfs://mock-review-token");
-    const receipt = await tx.wait();
+    // Mint NFT for holder
+    let tx = await ReviewNFT.mintNFT(holderDID, productId, ipfsCID);
+    let receipt = await tx.wait();
 
-    // Get tokenId from event
-    const event = receipt.logs.map(log => {
-        try {
-            return reviewNFT.interface.parseLog(log);
-        } catch { return null; }
-    }).find(e => e && e.name === "NFTMinted");
+    // Find NFTMinted event to get tokenId
+    const event = receipt.logs.find(log => log.fragment && log.fragment.name === "NFTMinted");
+    const tokenId = event ? event.args.tokenId : null;
+    console.log(`✅ ReviewNFT minted for DID ${holderDID} (productId ${productId}), tokenId: ${tokenId}`);
 
-    const tokenId = event ? event.args.tokenId : 1; // Fallback to 1 if not found
-
-    // Fetch status
-    const status = await reviewNFT.getNFTStatus(tokenId);
-    const STATUS_ENUM = ["Valid", "Used", "Expired"];
-    console.log(`📦 NFT status for tokenId ${tokenId}:`, STATUS_ENUM[Number(status)]);
-
-    // Check if the NFT is used
-    await reviewNFT.useNFT(tokenId, did);
-    const statusUsed = await reviewNFT.getNFTStatus(tokenId);
-    console.log(`📦 NFT status after use:`, STATUS_ENUM[Number(statusUsed)]);
-
-    // Check if the NFT is expired
-    await reviewNFT.expireNFTs([tokenId]);
-    const statusExpired = await reviewNFT.getNFTStatus(tokenId);
-    console.log(`📦 NFT status after expire:`, STATUS_ENUM[Number(statusExpired)]);
+    // Use NFT (mark as used)
+    if (tokenId !== null) {
+        tx = await ReviewNFT.useNFT(tokenId, holderDID);
+        await tx.wait();
+        console.log(`✅ ReviewNFT with tokenId ${tokenId} has been marked as used.`);
+    }
 }
 
-main().catch(console.error);
+main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+});
