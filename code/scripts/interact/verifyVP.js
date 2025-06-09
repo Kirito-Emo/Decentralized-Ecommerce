@@ -23,6 +23,8 @@ function save(file, data) {
 }
 
 async function main() {
+    console.log("\n----- Interact with VP -----");
+
     // Load DIDs and config
     const issuer = loadJSON("issuer-did.json");
     const holder = loadJSON("holder-did.json");
@@ -73,7 +75,7 @@ async function main() {
 
     // VP verification
     const classicResult = await verifyPresentation(classicVpJwt, resolver);
-    console.log("\n✅ Classic VP verified.\nContent:\n", JSON.stringify(classicResult, null, 2));
+    console.log("✅ Classic VP verified.");
 
     // SD-JWT style (hashed claims)
     const claims = { name: "Emanuele Boh", nationality: "IT" };
@@ -111,7 +113,7 @@ async function main() {
 
     // VP SD-JWT verification
     const sdResult = await verifyPresentation(sdVpJwt, resolver);
-    console.log("\n✅ SD-JWT VP verified.\nContent:\n", JSON.stringify(sdResult, null, 2));
+    console.log("\n✅ SD-JWT VP verified.");
 
     // SD-JWT: verify disclosed claim
     const storedHashes = sdResult.verifiablePresentation.verifiableCredential[0].credentialSubject.hashes;

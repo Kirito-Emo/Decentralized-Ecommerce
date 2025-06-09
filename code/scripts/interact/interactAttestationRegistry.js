@@ -22,6 +22,8 @@ function loadJSON(file) {
 }
 
 async function main() {
+    console.log("\n----- Interact with Attestation Registry -----");
+
     // Load attestation
     const attestation = loadJSON(FILENAME);
 

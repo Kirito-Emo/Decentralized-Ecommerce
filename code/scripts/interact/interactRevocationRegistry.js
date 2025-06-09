@@ -19,56 +19,76 @@ function loadJSON(file) {
 }
 
 async function main() {
-    // Load issuer DID and address
-    const issuer = loadJSON("issuer-did.json");
-    const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
-    const signer = new ethers.Wallet(issuer.privateKey, provider);
+    console.log("\n----- Interact with Revocation Registry -----");
 
-    //Load RevocationRegistry contract address
+    // Load issuer DID and address
+    const issuer = loadJSON("issuer-did.json");     // original owner
+    const issuer2 = loadJSON("issuer2-did.json");   // new owner
+    const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
+    let signer = new ethers.Wallet(issuer.privateKey, provider);
+
+    // Load RevocationRegistry contract address
     const addrs = loadJSON("../contract-addresses.json");
     const registryAddr = addrs.RevocationRegistry;
     if (!registryAddr) throw new Error("RevocationRegistry address not found in contract-addresses.json");
     console.log("Connected to RevocationRegistry at:", registryAddr);
 
-    // Attach to deployed contract as owner
-    const registry = await ethers.getContractAt("RevocationRegistry", registryAddr, signer);
+    // Attach to deployed contract as original owner
+    let registry = await ethers.getContractAt("RevocationRegistry", registryAddr, signer);
 
     // Read issuer DID (metadata)
     const issuerDID = await registry.getIssuerDID();
     console.log("Issuer DID (metadata):", issuerDID);
 
+    // Manual nonce management
+    let nonce = await provider.getTransactionCount(signer.address, "pending");
+
     // Update the revocation list CID (simulate a new IPFS CID)
     const newCID = "QmRevocationListCID_" + Math.floor(Date.now() / 1000);
-    console.log("\n[tx] Updating revocation list CID to:", newCID);
-    const currentNonce = await signer.getNonce();
-    const tx = await registry.updateRevocationList(newCID, { nonce: currentNonce });
+    console.log("\nUpdating revocation list CID to:", newCID);
+    let tx = await registry.updateRevocationList(newCID, { nonce });
     await tx.wait();
     console.log("✅ Revocation list updated.");
+    nonce++;
 
     // Read back the latest CID
     const currentCID = await registry.getRevocationCID();
-    console.log("Current revocation list CID:", currentCID);
+    console.log("\nCurrent revocation list CID:", currentCID);
 
-    // Change owner to another address
+    // Change owner to issuer2 or fallback to second account
     let newOwner;
     try {
-        const issuer2 = loadJSON("issuer2-did.json");
         newOwner = issuer2.address;
     } catch {
         const accounts = await provider.listAccounts();
-        newOwner = accounts[1] || signer.address; // Fallback to second account if available
+        newOwner = accounts[1] || signer.address;
     }
-    console.log("\n[tx] Changing owner to:", newOwner);
-    const nextNonce = await signer.getNonce() + 1; // Increment nonce for owner change
-    const tx2 = await registry.changeOwner(newOwner, { nonce: nextNonce });
-    await tx2.wait();
+    console.log("\nChanging owner to:", newOwner);
+    tx = await registry.changeOwner(newOwner, { nonce });
+    await tx.wait();
     console.log("✅ Owner changed.");
+    nonce++;
 
     // Verify new owner
-    const actualOwner = await registry.getOwner();
+    let actualOwner = await registry.getOwner();
     console.log("Current contract owner:", actualOwner);
 
-    console.log("\nAll RevocationRegistry interactions complete.");
+    // Attach to deployed contract as new owner
+    signer = new ethers.Wallet(issuer2.privateKey, provider);
+    registry = await ethers.getContractAt("RevocationRegistry", registryAddr, signer);
+    nonce = await provider.getTransactionCount(signer.address, "pending");
+
+    // Restore original owner
+    newOwner = issuer.address;
+    console.log("\nRestoring owner to:", newOwner);
+    tx = await registry.changeOwner(newOwner, { nonce });
+    await tx.wait();
+    console.log("✅ Owner restored.");
+    nonce++;
+
+    // Verify new owner
+    actualOwner = await registry.getOwner();
+    console.log("Current contract owner:", actualOwner);
 }
 
 main().catch((err) => {

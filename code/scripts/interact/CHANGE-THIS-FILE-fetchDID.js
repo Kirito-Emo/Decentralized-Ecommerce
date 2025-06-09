@@ -19,6 +19,8 @@ const master = HDNodeWallet.fromPhrase(MNEMONIC, "", "m");
 
 // === EthrDID ===
 async function main() {
+    console.log("\n----- Interact with fetchDID -----");
+
     // Derive 4 accounts from the master wallet and create DIDs (2 issuers, 2 holders)
     ["issuer", "holder", "issuer2", "holder2"].forEach((role, i) => {
         const wallet = master.derivePath(`${ACCOUNT_PATH}/${i}`);

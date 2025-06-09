@@ -18,6 +18,8 @@ const holder = JSON.parse(fs.readFileSync(path.join(__dirname, "holder-did.json"
 const holderDID = holder.did;
 
 async function main() {
+    console.log("\n----- Interact with Ban Registry -----");
+
     // Load BanRegistry contract address
     const filePath = path.join(__dirname, "../contract-addresses.json");
     const addresses = JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -44,7 +46,7 @@ async function main() {
     // Ban the holder DID
     tx = await BanRegistry.banUser(holderDID);
     await tx.wait();
-    console.log(`✅ Holder DID ${holderDID} has been banned.`);
+    console.log(`\n✅ Holder DID ${holderDID} has been banned.`);
 
     // Check ban status (expected to be true)
     const isBanned = await BanRegistry.isDIDBanned(holderDID);
@@ -53,7 +55,7 @@ async function main() {
     // Unban the holder DID
     tx = await BanRegistry.unbanUser(holderDID);
     await tx.wait();
-    console.log(`✅ Holder DID ${holderDID} has been unbanned.`);
+    console.log(`\n✅ Holder DID ${holderDID} has been unbanned.`);
 
     // Check again (expected to be false)
     const isBanned2 = await BanRegistry.isDIDBanned(holderDID);

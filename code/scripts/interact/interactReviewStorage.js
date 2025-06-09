@@ -19,6 +19,8 @@ const holder = JSON.parse(fs.readFileSync(path.join(__dirname, "holder-did.json"
 const holderDID = holder.did;
 
 async function main() {
+    console.log("\n----- Interact with Review Storage -----");
+
     // Set up IPFS client (IPFS Desktop, default API port 5001)
     const ipfs = create({ url: "http://localhost:5001" });
 
@@ -46,7 +48,7 @@ async function main() {
     const reviewText2 = "This is my UPDATED review, with better insights. Still on IPFS!";
     const { cid: cid2 } = await ipfs.add({ content: reviewText2 });
     const ipfsCID2 = cid2.toString();
-    console.log("✅ Review v2 uploaded to IPFS:", ipfsCID2);
+    console.log("\n✅ Review v2 uploaded to IPFS:", ipfsCID2);
 
     // Update the review on-chain
     if (reviewId !== null) {

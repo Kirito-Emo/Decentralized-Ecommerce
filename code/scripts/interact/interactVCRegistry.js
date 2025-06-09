@@ -29,6 +29,8 @@ function loadJSON(file) {
 }
 
 async function main() {
+  console.log("\n----- Interact with VC Registry -----");
+
   // Setup on-chain provider & wallets
   const provider= new ethers.JsonRpcProvider("http://127.0.0.1:8545");  // Ganache address
   const issuerData = loadJSON("issuer-did.json");  // trusted issuer
@@ -37,7 +39,7 @@ async function main() {
   const issuerWallet = new ethers.Wallet(issuerData.privateKey, provider);
   console.log("Issuer address:", issuerData.address);
 
-  // Build DID objects for off-chain VC signing
+  // Build DID for off-chain VC signing
   const network = await provider.getNetwork();
   const chainId = network.chainId;
   const ethrDid = new EthrDID({
@@ -65,7 +67,7 @@ async function main() {
   const vcJwt = await createVerifiableCredentialJwt(vcPayload, ethrDid);
   console.log("\n✅ Created VC JWT:\n", vcJwt);
 
-  // Verify the same VC locally via DID Resolver
+  // Verify the VC locally via DID Resolver
   const addrs = loadJSON("../contract-addresses.json");
   const resolverConfig = {
     networks: [{
@@ -77,7 +79,7 @@ async function main() {
   };
   const didResolver = new Resolver(ethrDidResolver.getResolver(resolverConfig));
   const verified = await verifyCredential(vcJwt, didResolver);
-  console.log("\n🔎 Verified VC:\n", JSON.stringify(verified, null, 2));
+  console.log("\n🔎 VC Verified");
 
   // Anchor on-chain in VCRegistry
   const vcRegistry = await ethers.getContractAt("VCRegistry", addrs.VCRegistry, issuerWallet);
@@ -85,15 +87,22 @@ async function main() {
   const vcHash = ethers.keccak256(ethers.toUtf8Bytes(vcJwt));
   console.log("\nRegistering VC hash on-chain:", vcHash);
 
-  await (await vcRegistry.registerVC(vcHash, ethrDid.did, subjectData.did)).wait();
+  // Explicit nonce management
+  let nonce = await provider.getTransactionCount(issuerWallet.address, "pending");
+
+  // Register VC
+  let tx = await vcRegistry.registerVC(vcHash, ethrDid.did, subjectData.did, { nonce });
+  console.log(`\n⏳ Sent registerVC tx: ${tx.hash} [nonce=${nonce}]`);
+  await tx.wait();
   console.log("✅ VC registered");
+  nonce++;
 
   // Check validity
-  console.log("isValid after register:", await vcRegistry.isValid(vcHash)); // expected: true
+  console.log("\nisValid after register:", await vcRegistry.isValid(vcHash)); // expected: true
 
   // Fetch record
   const rec = await vcRegistry.getVC(vcHash);
-  console.log("VCRecord:", {
+  console.log("\nVCRecord:", {
     issuer:    rec.issuer,
     issuerDID: rec.issuerDID,
     subjectDID: rec.subjectDID,
@@ -102,11 +111,14 @@ async function main() {
   });
 
   // Revoke the VC
-  await (await vcRegistry.revokeVC(vcHash)).wait();
-  console.log("\n✅ VC revoked");
+  tx = await vcRegistry.revokeVC(vcHash, { nonce });
+  console.log(`\n⏳ Sent revokeVC tx: ${tx.hash} [nonce=${nonce}]`);
+  await tx.wait();
+  console.log("✅ VC revoked");
+  nonce++;
 
   // Final validity check
-  console.log("isValid after revoke:", await vcRegistry.isValid(vcHash)); // expected: false
+  console.log("\nisValid after revoke:", await vcRegistry.isValid(vcHash)); // expected: false
 }
 
 main().catch((err) => {

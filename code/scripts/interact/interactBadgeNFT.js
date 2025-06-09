@@ -24,6 +24,8 @@ function loadJSON(file) {
 }
 
 async function main() {
+    console.log("\n----- Interact with BadgeNFT -----");
+
     // Load issuer DID credentials
     const issuer = loadJSON("issuer-did.json");
 
@@ -32,60 +34,70 @@ async function main() {
     const signer = new ethers.Wallet(issuer.privateKey, provider);
     console.log("Using signer address:", signer.address);
 
-    // Retrieve deployed BadgeNFT address
+    // Retrieve contract address
     const addresses = loadJSON("../contract-addresses.json");
     const badgeAddr = addresses.BadgeNFT;
-    if (!badgeAddr) {
-        throw new Error("BadgeNFT address not found in contract-addresses.json");
-    }
+    if (!badgeAddr) throw new Error("BadgeNFT address not found in contract-addresses.json");
     console.log("Connected to BadgeNFT at:", badgeAddr);
 
-    // Create contract instance connected to signer
+    // Connect to BadgeNFT contract
     const badge = await ethers.getContractAt("BadgeNFT", badgeAddr, signer);
 
     // Use the issuer's DID as the identity key for testing
     const did = issuer.did;
     console.log("Testing DID:", did);
 
-    // Reputation deltas to trigger badge levels
-    const deltas = [1, 9, 40];
-    const levels = ["Bronze", "Silver", "Gold"];
-
-    // Iterate through deltas to mint and upgrade badges
-    for (let i = 0; i < deltas.length; i++) {
-        const delta = deltas[i];
-        const expectedLevel = levels[i];
-        console.log(`\nStep ${i + 1}: updateReputation(${delta}) -> expect ${expectedLevel} badge`);
-
-        const txCount = await signer.getNonce(); // Get current nonce for the signer
-        const tx = await badge.updateReputation(did, delta, { nonce: txCount });
-        await tx.wait();
-
-        // Fetch and display updated badge state
-        const currentLevel = await badge.getUserBadge(did);
-        const repValue = await badge.getReputation(did);
-        const tokenId = await badge.getTokenIdForDID(did);
-
-        const LEVEL_NAMES = ["None", "Bronze", "Silver", "Gold"];
-        console.log(`BadgeLevel: ${LEVEL_NAMES[currentLevel]}`);
-        console.log(`Reputation: ${repValue}`);
-        if (i === 0) {
-            // Token ID assigned only on mint
-            console.log(`TokenId: ${tokenId}`);
-        }
+    // Check if signer has REPUTATION_UPDATER_ROLE
+    const repRole = await badge.REPUTATION_UPDATER_ROLE();
+    const hasRole = await badge.hasRole(repRole, signer.address);
+    if (!hasRole) {
+        console.error("❌ Signer does NOT have REPUTATION_UPDATER_ROLE. Cannot update reputation.");
+        process.exit(1);
     }
 
-    // Verify soulbound behavior: transfers should revert
+    // Function to send a tx with current nonce
+    let nonce = await provider.getTransactionCount(signer.address, "pending");
+
+    async function sendTx(fn, ...args) {
+        const txObj = await fn(...args, { nonce });
+        console.log(`\n⏳ Sent tx: ${txObj.hash} [nonce=${nonce}]`);
+        await txObj.wait();
+        console.log(`✅ Tx mined [nonce=${nonce}]`);
+        nonce++;
+    }
+
+    // Step 1: Bronze
+    await sendTx(badge.updateReputation, did, 1);
+    console.log("Bronze badge acquired");
+
+    // Step 2: Silver
+    await sendTx(badge.updateReputation, did, 9);
+    console.log("Silver badge acquired");
+
+    // Step 3: Gold
+    await sendTx(badge.updateReputation, did, 40);
+    console.log("Gold badge acquired");
+
+    // Fetch and display updated badge state
+    const levels = ["None", "Bronze", "Silver", "Gold"];
+    const currentLevel = await badge.getUserBadge(did);
+    const repValue = await badge.getReputation(did);
+    const tokenId = await badge.getTokenIdForDID(did);
+    console.log(`\nBadgeLevel: ${levels[currentLevel]}`);
+    console.log(`Reputation: ${repValue}`);
+    console.log(`TokenId: ${tokenId}`);
+
+    // Verify soulbound behavior: transfer should revert
     console.log("\nVerifying non-transferability...");
-    const ownedTokenId = await badge.getTokenIdForDID(did);
     try {
-        await badge.transferFrom(signer.address, signer.address, ownedTokenId);
-        console.error("Error: transfer succeeded unexpectedly");
+        // Manually set nonce for the transfer tx as well
+        const tx = await badge.transferFrom(signer.address, signer.address, tokenId, { nonce });
+        await tx.wait();
+        console.error("Error: transfer succeeded unexpectedly!");
+        nonce++;
     } catch (error) {
         console.log("Transfer prevented as expected:", error.message.split("\n")[0]);
     }
-
-    console.log("\nAll interactions complete.");
 }
 
 main().catch((error) => {

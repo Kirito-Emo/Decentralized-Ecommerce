@@ -24,6 +24,8 @@ const ipfsCID = "Qm..."
 const productId = 42;
 
 async function main() {
+    console.log("\n----- Interact with ReviewNFT -----");
+
     // Load ReviewNFT contract address
     const filePath = path.join(__dirname, "../contract-addresses.json");
     const addresses = JSON.parse(fs.readFileSync(filePath, "utf8"));
