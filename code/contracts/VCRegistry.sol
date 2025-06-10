@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: Apache 2.0
-// Copyright 2025 Emanuele Relmi
 pragma solidity ^0.8.25;
 
-/// @title VCRegistry - Verifiable Credential Registry with DID support and trusted issuer control
-/// @notice This contract anchors on-chain the hashes of Verifiable Credentials (VCs) issued off-chain
-///         Only addresses whitelisted as "trusted issuers" can register or revoke VC hashes
-///         For each VC hash, the registry stores: issuer (address + DID), subject DID, timestamp, and revocation status
-///         No personal data or cleartext attributes are ever stored; only minimal audit and compliance data
+/// @title VCRegistry - Verifiable Credential Registry with IPFS bitstring status list (W3C/WP2 compliant)
+/// @notice Anchors VC hashes on-chain, manages trusted issuers, and exposes IPFS CIDs for audit/status bitstrings
+
 contract VCRegistry {
     /// @dev Structure for each VC registration entry
     struct VCRecord {
@@ -20,13 +17,21 @@ contract VCRegistry {
     /// @dev Maps VC hash to its registration record
     mapping(bytes32 => VCRecord) public registry;
 
-    /// @dev Maps address to trusted issuer status
+    /// @dev Whitelist for trusted issuers
     mapping(address => bool) public trustedIssuer;
 
-    /// @dev Events for monitoring registry actions
+    /// @dev IPFS CIDs for different status lists (W3C/WP2)
+    string public emittedListCID;    // List of all emitted VC hashes (optional)
+    string public statusListCID;     // VC Status List (bitstring W3C VC Status List 2021)
+    string public revokedListCID;    // List of revoked VC hashes (legacy/simple)
+
+    /// @dev Events
     event VCRegistered(bytes32 indexed vcHash, address indexed issuer, string issuerDID, string subjectDID, uint256 timestamp);
     event VCRevoked(bytes32 indexed vcHash, address indexed issuer, uint256 timestamp);
     event TrustedIssuerSet(address indexed issuer, bool enabled);
+    event EmittedListCIDUpdated(string newCID, uint256 timestamp);
+    event StatusListCIDUpdated(string newCID, uint256 timestamp);
+    event RevokedListCIDUpdated(string newCID, uint256 timestamp);
 
     /// @dev Restricts access to only trusted issuers
     modifier onlyTrustedIssuer() {
@@ -46,7 +51,7 @@ contract VCRegistry {
         emit TrustedIssuerSet(issuer, enabled);
     }
 
-    /// @dev Registers a new VC hash anchored on-chain
+    /// @dev Registers a new VC hash on-chain
     function registerVC(bytes32 vcHash, string calldata issuerDID, string calldata subjectDID) external onlyTrustedIssuer {
         require(registry[vcHash].timestamp == 0, "VC already registered");
         registry[vcHash] = VCRecord({
@@ -78,5 +83,36 @@ contract VCRegistry {
     /// @dev Returns all details of a VC hash
     function getVC(bytes32 vcHash) external view returns (VCRecord memory record) {
         record = registry[vcHash];
+    }
+
+    /// @dev Sets the IPFS CID of the full list of emitted VC hashes
+    function setEmittedListCID(string calldata newCID) external onlyTrustedIssuer {
+        emittedListCID = newCID;
+        emit EmittedListCIDUpdated(newCID, block.timestamp);
+    }
+
+    /// @dev Returns the IPFS CID of the emitted list
+    function getEmittedListCID() external view returns (string memory) {
+        return emittedListCID;
+    }
+
+    /// @dev Sets the IPFS CID of the W3C Status List (bitstring)
+    function setStatusListCID(string calldata newCID) external onlyTrustedIssuer {
+        statusListCID = newCID;
+        emit StatusListCIDUpdated(newCID, block.timestamp);
+    }
+    function getStatusListCID() external view returns (string memory) {
+        return statusListCID;
+    }
+
+    /// @dev Sets the IPFS CID of the list of revoked VC hashes
+    function setRevokedListCID(string calldata newCID) external onlyTrustedIssuer {
+        revokedListCID = newCID;
+        emit RevokedListCIDUpdated(newCID, block.timestamp);
+    }
+
+    /// @dev Returns the IPFS CID of the revoked list
+    function getRevokedListCID() external view returns (string memory) {
+        return revokedListCID;
     }
 }

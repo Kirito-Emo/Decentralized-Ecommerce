@@ -60,9 +60,8 @@ async function main() {
 
     async function sendTx(fn, ...args) {
         const txObj = await fn(...args, { nonce });
-        console.log(`\n⏳ Sent tx: ${txObj.hash} [nonce=${nonce}]`);
         await txObj.wait();
-        console.log(`✅ Tx mined [nonce=${nonce}]`);
+        console.log(`\n✅ Tx mined [nonce=${nonce}]`);
         nonce++;
     }
 

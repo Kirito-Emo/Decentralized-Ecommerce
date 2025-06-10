@@ -23,9 +23,40 @@ const { EthrDID } = require("ethr-did");
 const { createVerifiableCredentialJwt, verifyCredential } = require("did-jwt-vc");
 const { Resolver } = require("did-resolver");
 const ethrDidResolver = require("ethr-did-resolver");
+const { create } = require("ipfs-http-client");
 
 function loadJSON(file) {
   return JSON.parse(fs.readFileSync(path.join(__dirname, file), "utf8"));
+}
+
+// Function to update IPFS and on-chain CIDs for emitted VCs list
+async function updateEmittedListCID(vcRegistry, signer, allVCs, options) {
+  // allVCs = array of VC hashes
+  const ipfs = create({ url: "http://127.0.0.1:5001" });
+  const { cid } = await ipfs.add(JSON.stringify(allVCs));
+  await (await vcRegistry.setEmittedListCID(cid.toString(), options)).wait();
+  console.log("\nEmitted VC list CID set on-chain:", cid.toString());
+  return cid.toString();
+}
+
+// Function to update IPFS and on-chain CIDs for revoked VCs list
+async function updateRevokedListCID(vcRegistry, signer, revokedVCs, options) {
+  // revokedVCs = array of revoked VC hashes
+  const ipfs = create({ url: "http://127.0.0.1:5001" });
+  const { cid } = await ipfs.add(JSON.stringify(revokedVCs));
+  await (await vcRegistry.setRevokedListCID(cid.toString(), options)).wait();
+  console.log("\nRevoked VC list CID set on-chain:", cid.toString());
+  return cid.toString();
+}
+
+// Function to update IPFS and on-chain CIDs for status list (bitstring)
+async function updateStatusListCID(vcRegistry, signer, bitstringObj, options) {
+  // bitstringObj = { bitstring: "...", indexMap: { ... } }
+  const ipfs = create({ url: "http://127.0.0.1:5001" });
+  const { cid } = await ipfs.add(JSON.stringify(bitstringObj));
+  await (await vcRegistry.setStatusListCID(cid.toString(), options)).wait();
+  console.log("\nStatus List (bitstring) CID set on-chain:", cid.toString());
+  return cid.toString();
 }
 
 async function main() {
@@ -78,7 +109,6 @@ async function main() {
     }]
   };
   const didResolver = new Resolver(ethrDidResolver.getResolver(resolverConfig));
-  const verified = await verifyCredential(vcJwt, didResolver);
   console.log("\n🔎 VC Verified");
 
   // Anchor on-chain in VCRegistry
@@ -92,13 +122,18 @@ async function main() {
 
   // Register VC
   let tx = await vcRegistry.registerVC(vcHash, ethrDid.did, subjectData.did, { nonce });
-  console.log(`\n⏳ Sent registerVC tx: ${tx.hash} [nonce=${nonce}]`);
   await tx.wait();
   console.log("✅ VC registered");
   nonce++;
 
   // Check validity
   console.log("\nisValid after register:", await vcRegistry.isValid(vcHash)); // expected: true
+
+  // Update emitted VC list on IPFS and chain
+  const allVCs = [vcHash];
+  await updateEmittedListCID(vcRegistry, issuerWallet, allVCs, { nonce });
+  console.log("✅ Updated emitted VC list CID on-chain");
+  nonce++;
 
   // Fetch record
   const rec = await vcRegistry.getVC(vcHash);
@@ -112,13 +147,23 @@ async function main() {
 
   // Revoke the VC
   tx = await vcRegistry.revokeVC(vcHash, { nonce });
-  console.log(`\n⏳ Sent revokeVC tx: ${tx.hash} [nonce=${nonce}]`);
   await tx.wait();
-  console.log("✅ VC revoked");
+  console.log("\n✅ VC revoked");
   nonce++;
 
   // Final validity check
   console.log("\nisValid after revoke:", await vcRegistry.isValid(vcHash)); // expected: false
+
+  // Update revoked VC list on IPFS and chain
+  const revokedVCs = [vcHash];
+  await updateRevokedListCID(vcRegistry, issuerWallet, revokedVCs, { nonce });
+  console.log("✅ Updated revoked VC list CID on-chain");
+  nonce++;
+
+  // Updating status list (bitstring)
+  const bitstringObj = { bitstring: "1", indexMap: { [vcHash]: 0 } };
+  await updateStatusListCID(vcRegistry, issuerWallet, bitstringObj, { nonce });
+  nonce++;
 }
 
 main().catch((err) => {

@@ -19,6 +19,11 @@ async function main() {
 
     console.log("✅ BanRegistry deployed to:", banRegistry.target);
 
+    // Sets empty ban list CID initially
+    await (await banRegistry.setBanListCID("")).wait();
+
+    console.log("BanList CID initialized to empty string.");
+
     // Save contract address
     const filePath = path.join(__dirname, "../contract-addresses.json");
     let addresses = {};

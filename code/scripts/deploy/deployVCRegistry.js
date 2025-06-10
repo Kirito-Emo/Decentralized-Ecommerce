@@ -17,7 +17,14 @@ async function main() {
     const VCRegistry = await ethers.getContractFactory("VCRegistry");
     const vcRegistry = await VCRegistry.deploy();
 
-    console.log("✅ VCRegistry deployed to:", vcRegistry.target);
+    console.log("✅ VCRegistry deployed at:", vcRegistry.target);
+
+    // Sets empty CIDs for emitted, revoked and status lists
+    await (await vcRegistry.setEmittedListCID("")).wait();
+    await (await vcRegistry.setRevokedListCID("")).wait();
+    await (await vcRegistry.setStatusListCID("")).wait();
+
+    console.log("Emitted/Revoked/Status List CIDs initialized to empty string.");
 
     // Save the contract address to JSON file
     const filePath = path.join(__dirname, "../contract-addresses.json");

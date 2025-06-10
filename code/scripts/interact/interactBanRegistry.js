@@ -12,10 +12,20 @@
 const { ethers } = require("hardhat");
 const fs = require("fs");
 const path = require("path");
+const { create } = require("ipfs-http-client");
 
 // Load holder DID
 const holder = JSON.parse(fs.readFileSync(path.join(__dirname, "holder-did.json"), "utf8"));
 const holderDID = holder.did;
+
+// Function to update the ban list on IPFS and write the CID on-chain
+async function updateBanListCID(BanRegistry, signer, bannedList) {
+    const ipfs = create({ url: "http://127.0.0.1:5001" });
+    const { cid } = await ipfs.add(JSON.stringify(bannedList));
+    await (await BanRegistry.setBanListCID(cid.toString())).wait();
+    console.log("Ban list CID set on-chain:", cid.toString());
+    return cid.toString();
+}
 
 async function main() {
     console.log("\n----- Interact with Ban Registry -----");
@@ -52,6 +62,11 @@ async function main() {
     const isBanned = await BanRegistry.isDIDBanned(holderDID);
     console.log(`Ban status for ${holderDID}:`, isBanned);
 
+    // Update the ban list on IPFS and write the CID on-chain
+    let bannedList = [holderDID];
+    await updateBanListCID(BanRegistry, deployer, bannedList);
+    console.log("\n✅ Ban list updated on IPFS and CID set on-chain.");
+
     // Unban the holder DID
     tx = await BanRegistry.unbanUser(holderDID);
     await tx.wait();
@@ -60,6 +75,10 @@ async function main() {
     // Check again (expected to be false)
     const isBanned2 = await BanRegistry.isDIDBanned(holderDID);
     console.log(`Ban status after unban for ${holderDID}:`, isBanned2);
+
+    bannedList = [];
+    await updateBanListCID(BanRegistry, deployer, bannedList);
+    console.log("\n✅ Ban list updated on IPFS and CID set on-chain after unban.");
 }
 
 main().catch((error) => {

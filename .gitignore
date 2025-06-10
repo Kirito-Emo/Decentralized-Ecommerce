@@ -1,10 +1,12 @@
 # Files/directories to be ignored - Project under Apache-2.0 License
 # Copyright 2025 Emanuele Relmi
 /.idea/
+
 /code/artifacts/
 /code/cache/
 /code/package-lock.json
 /code/node_modules/
+
 /code/scripts/contract-addresses.json
 /code/scripts/interact/fetchDID.js
 /code/scripts/interact/issuer-did.json
@@ -19,6 +21,8 @@
 /code/scripts/interact/semaphore_attestation.json
 /code/scripts/interact/Semaphore/semaphore.wasm
 /code/scripts/interact/Semaphore/semaphore.zkey
+
+/code/scripts/dApp-scripts/local-db.json
 
 /code/frontend/package-lock.json
 /code/frontend/node_modules/
