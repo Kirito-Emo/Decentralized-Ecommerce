@@ -4,7 +4,7 @@
 /**
  * ReviewStorage interaction script
  * - Uploads review text to IPFS (IPFS Desktop API on localhost:5001)
- * - Stores review for a real holder DID
+ * - Stores review for a real holder DID + NFT tokenId
  * - Updates the review with a second version (new content, new IPFS CID)
  * Technologies: Hardhat, ethers v6, Ganache (localhost:8545), ipfs-http-client
  */
@@ -17,6 +17,8 @@ const { create } = require("ipfs-http-client");
 // Load holder DID
 const holder = JSON.parse(fs.readFileSync(path.join(__dirname, "holder-did.json"), "utf8"));
 const holderDID = holder.did;
+
+const tokenId = 1; // Example tokenId, replace with actual NFT tokenId if needed
 
 async function main() {
     console.log("\n----- Interact with Review Storage -----");
@@ -36,13 +38,14 @@ async function main() {
     const ReviewStorage = await ethers.getContractAt("ReviewStorage", addresses.ReviewStorage);
 
     // Store the review on-chain
-    let tx = await ReviewStorage.storeReview(holderDID, ipfsCID1);
+    let tx = await ReviewStorage.storeReview(holderDID, tokenId, ipfsCID1);
     let receipt = await tx.wait();
 
     // Find ReviewStored event for reviewId
     const event = receipt.logs.find(log => log.fragment && log.fragment.name === "ReviewStored");
     const reviewId = event ? event.args.reviewId : null;
-    console.log(`✅ Review stored for DID ${holderDID} with reviewId ${reviewId}`);
+    const emittedTokenId = event ? event.args.tokenId : null;
+    console.log(`✅ Review stored for DID ${holderDID} with reviewId ${reviewId} (NFT tokenId: ${emittedTokenId})`);
 
     // Review text v2
     const reviewText2 = "This is my UPDATED review, with better insights. Still on IPFS!";
@@ -56,6 +59,9 @@ async function main() {
         await tx.wait();
         console.log(`✅ Review updated for reviewId ${reviewId}`);
     }
+
+    const [latestCid, isRevoked, lastUpdate, reviewTokenId] = await ReviewStorage.getLatestReview(reviewId);
+    console.log(`Latest review data: CID=${latestCid}, revoked=${isRevoked}, lastUpdate=${lastUpdate}, tokenId=${reviewTokenId}`);
 }
 
 main().catch((error) => {

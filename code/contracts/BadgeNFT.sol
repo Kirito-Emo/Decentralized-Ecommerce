@@ -69,6 +69,9 @@ contract BadgeNFT is ERC721URIStorage, AccessControl {
                 badgeLevel[did] = newLevel;
                 emit BadgeUpgraded(did, newLevel);
             }
+        } else if (newLevel < current) {
+            badgeLevel[did] = newLevel;
+            emit BadgeUpgraded(did, newLevel);
         }
     }
 

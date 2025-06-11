@@ -22,7 +22,7 @@
 /code/scripts/interact/Semaphore/semaphore.wasm
 /code/scripts/interact/Semaphore/semaphore.zkey
 
-/code/scripts/dApp-scripts/local-db.json
+/code/scripts/dApp/local-db.json
 
 /code/frontend/package-lock.json
 /code/frontend/node_modules/

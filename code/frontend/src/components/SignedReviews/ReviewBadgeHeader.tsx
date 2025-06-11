@@ -2,9 +2,9 @@
 // Copyright 2025 Emanuele Relmi
 
 /**
- * ReviewBadgeHeader
  * Shows user's reputation and badge in a styled header
  */
+
 import { motion } from "framer-motion";
 
 export function ReviewBadgeHeader({ level, badge }: { level: number; badge: any }) {

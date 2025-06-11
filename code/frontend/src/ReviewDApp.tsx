@@ -3,11 +3,10 @@
 
 /**
  * Main dApp component for the decentralized review platform
- * Organizes Three.js scene, login, navigation, card system and features panels
- * Panel logic is fully modular
+ * Robust wallet connect, fetch banned DIDs/revoked VCs, centralizes all critical state
  */
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Scene from "./Scene";
 import { IdCard, MessageSquareText, ShieldUser } from "lucide-react";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
@@ -24,16 +23,7 @@ import DecryptingTitle from "./components/DecryptedTitle.tsx";
 /**
  * FeatureCard config for rendering selection UI and linking to correct panel
  */
-interface Feature {
-  title: string;
-  description: string;
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-  bg: string;
-  glow: string;
-}
-
-// List of available features/cards
-const features: Feature[] = [
+const features = [
   {
     title: "Wallet & Access",
     description: "Manage decentralized credentials and access securely",
@@ -60,30 +50,56 @@ const features: Feature[] = [
 export default function ReviewDApp() {
   // State for expanded card panel (feature)
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
-  // State for connected wallet address
-  const [wallet, setWallet] = useState<string | null>(null);
 
-  // --- VC (Verifiable Credential) persistence and DID entries ---
+  // Wallet state
+  const [wallet, setWallet] = useState<string | null>(null);
+  const [walletError, setWalletError] = useState<string | null>(null);
+
+  // VC/DID state
   const [vc, setVc] = useState<any>(() => {
     const stored = localStorage.getItem("vc");
     return stored ? JSON.parse(stored) : null;
   });
 
-  // --- DID entries persistence ---
+  // DID entries (local storage)
   const [didEntries, setDidEntries] = useState<any[]>(() => {
     const stored = localStorage.getItem("didEntries");
     return stored ? JSON.parse(stored) : [];
   });
 
-  // --- VC status and banned DIDs ---
-  // Status of the loaded VC (valid/revoked/expired/null)
-  const [vcStatus, setVcStatus] = useState<"valid" | "revoked" | "expired" | null>(null);
-  // Banned DIDs for this user (array of DID strings)
-  const [bannedDids, setBannedDids] = useState<string[]>([]);
+  // Active DID (the one currently selected)
+  const [activeDid, setActiveDid] = useState<any>(() => {
+    const stored = localStorage.getItem("activeDid");
+    return stored ? JSON.parse(stored) : null;
+  });
 
-  /**
-   * On first render: load VC from URL if present and scroll to features
-   */
+  // VC/DIDs status
+  const [vcStatus, setVcStatus] = useState<"valid" | "revoked" | "expired" | null>(null);
+  const [bannedDids, setBannedDids] = useState<string[]>([]);
+  const [revokedDids, setRevokedDids] = useState<string[]>([]);
+  const [refreshSignedReviewsPanel, setRefreshSignedReviewsPanel] = useState(0);
+
+  // ---- Robust connect wallet handler ----
+  const connectWallet = async () => {
+    setWalletError(null);
+    if (typeof window === "undefined" || !window.ethereum) {
+      setWalletError("Please install or unlock MetaMask to use the dApp.");
+      return;
+    }
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const accounts = await provider.send("eth_requestAccounts", []);
+      if (!accounts || accounts.length === 0) {
+        setWalletError("No accounts found. Please unlock your wallet.");
+        return;
+      }
+      setWallet(accounts[0]);
+    } catch (err: any) {
+      setWalletError("Wallet connection failed: " + (err?.message || err));
+    }
+  };
+
+  // On first render load VC from URL if present and scroll to features
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const vcBase64 = params.get("vc");
@@ -99,45 +115,74 @@ export default function ReviewDApp() {
           if (section) section.scrollIntoView({ behavior: "smooth" });
         }, 400);
       } catch (err) {
+        console.error("Failed to parse VC from URL:", err);
         setVc(null);
         localStorage.removeItem("vc");
       }
     }
   }, []);
 
-  // --- Check VC status and banned DIDs whenever VC or DID entries change ---
+  // Sync activeDid with localStorage
+  useEffect(() => {
+    if (activeDid) localStorage.setItem("activeDid", JSON.stringify(activeDid));
+  }, [activeDid]);
+
+  // Update activeDid if didEntries changes
+  useEffect(() => {
+    if ((!activeDid || !didEntries.some((d: any) => d.did === activeDid.did)) && didEntries.length > 0) {
+      setActiveDid(didEntries[0]);
+    }
+    if (didEntries.length === 0) setActiveDid(null);
+  }, [activeDid, didEntries]);
+
+  // Fetch VC status (valid/revoked/expired) and banned/revoked DIDs from backend/IPFS/contract every time VC or DID change
   useEffect(() => {
     if (!vc || !vc.credentialSubject?.id) {
       setVcStatus(null);
       setBannedDids([]);
+      setRevokedDids([]);
       return;
     }
-
-    // Fetch VC status from backend
-    fetch(`/vc-status?userHash=${vc.credentialSubject.id}`)
+    // VC status
+    fetch(`http://localhost:8082/vc-status?userHash=${vc.credentialSubject.id}`)
         .then((res) => res.json())
         .then((data) => {
           setVcStatus(data.status as "valid" | "revoked" | "expired");
         })
         .catch(() => setVcStatus(null));
 
-    // Fetch banned DIDs from backend/IPFS
-    fetch("/ban-list-cid")
+    // Fetch banned DIDs list
+    fetch("http://localhost:8082/ban-list-cid")
         .then((res) => res.json())
         .then(async (data) => {
-          if (!data.cid) return;
-          // Use public IPFS gateway (or your own IPFS node)
+          if (!data.cid) {
+            setBannedDids([]);
+            return;
+          }
           const ipfsRes = await fetch(`https://ipfs.io/ipfs/${data.cid}`);
           const didList = await ipfsRes.json();
           const banned = didEntries.filter(entry => didList.includes(entry.did));
           setBannedDids(banned.map(entry => entry.did));
         })
         .catch(() => setBannedDids([]));
+
+    // Fetch revoked DIDs list
+    fetch("http://localhost:8082/vc-revoked-list-cid")
+        .then((res) => res.json())
+        .then(async (data) => {
+          if (!data.cid) {
+            setRevokedDids([]);
+            return;
+          }
+          const ipfsRes = await fetch(`https://ipfs.io/ipfs/${data.cid}`);
+          const didList = await ipfsRes.json();
+          const revoked = didEntries.filter(entry => didList.includes(entry.did));
+          setRevokedDids(revoked.map(entry => entry.did));
+        })
+        .catch(() => setRevokedDids([]));
   }, [vc, didEntries]);
 
-  /**
-   * Effect to manage body overflow when a card is expanded
-   */
+  // Scroll behavior
   useEffect(() => {
     if (expandedCard) {
       document.body.classList.add("overflow-hidden");
@@ -147,11 +192,8 @@ export default function ReviewDApp() {
     return () => document.body.classList.remove("overflow-hidden");
   }, [expandedCard]);
 
-  /*
-   * On full page reload, reset state if needed
-   */
+  // Reset state on full reload (F5) to ensure clean start
   useEffect(() => {
-    // On full reload (F5), reset card and scroll to home
     setExpandedCard(null);
     document.body.classList.remove("overflow-hidden");
     const hero = document.querySelector("section.snap-start");
@@ -162,12 +204,9 @@ export default function ReviewDApp() {
     }
   }, []);
 
-  /*
-    * Listen for VC messages from popup after login-vc form
-   */
+  // Listen for VC messages from popup after login-vc form
   useEffect(() => {
     function handleVCMessage(event: MessageEvent) {
-      // Accept only from your backend
       if (event.origin !== "http://localhost:8082") return;
       if (!event.data || event.data.type !== "VC_LOGIN") return;
       try {
@@ -176,46 +215,39 @@ export default function ReviewDApp() {
         setVc(JSON.parse(json));
         localStorage.setItem("vc", json);
         setExpandedCard("Wallet & Access");
-        // Scroll smoothly to features section
         setTimeout(() => {
           const section = document.getElementById("features-section");
           if (section) section.scrollIntoView({ behavior: "smooth" });
         }, 400);
       } catch (err) {
+        console.error("Failed to parse VC from message:", err);
         setVc(null);
         localStorage.removeItem("vc");
       }
     }
-    // Listen for messages from the popup window
     window.addEventListener("message", handleVCMessage);
     return () => window.removeEventListener("message", handleVCMessage);
   }, []);
 
-  /*
-    * Prevent browser zooming via keyboard shortcuts or pinch gestures
-   */
+  // Prevent browser zoom (UI feature)
   useEffect(() => {
     function blockZoom(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && ["=", "-", "0", "+", "_"].includes(e.key)) {
         e.preventDefault();
       }
     }
-
     function blockWheel(e: WheelEvent) {
       if (e.ctrlKey) e.preventDefault();
     }
-
     let lastTouchEnd = 0;
     function preventDoubleTapZoom(e: TouchEvent) {
       const now = Date.now();
       if (now - lastTouchEnd <= 300) e.preventDefault();
       lastTouchEnd = now;
     }
-
     window.addEventListener("keydown", blockZoom, { passive: false });
     window.addEventListener("wheel", blockWheel, { passive: false });
     document.addEventListener("touchend", preventDoubleTapZoom, false);
-
     return () => {
       window.removeEventListener("keydown", blockZoom);
       window.removeEventListener("wheel", blockWheel);
@@ -223,30 +255,7 @@ export default function ReviewDApp() {
     };
   }, []);
 
-  /**
-   * Scroll to cards/feature section
-   */
-  const scrollToCards = () => {
-    const target = document.getElementById("features-section");
-    if (target) target.scrollIntoView({ behavior: "smooth" });
-  };
-
-  /**
-   * Connect wallet (MetaMask, etc.)
-   */
-  const connectWallet = async () => {
-    try {
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const accounts = await provider.send("eth_requestAccounts", []);
-      setWallet(accounts[0]);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  /**
-   * Create a new Ed25519 DID and persist in localStorage
-   */
+  // DID handlers
   async function handleCreateDid() {
     const didData = await generateEd25519DID();
     const newEntry = {
@@ -258,11 +267,10 @@ export default function ReviewDApp() {
     const updated = [...didEntries, newEntry];
     setDidEntries(updated);
     localStorage.setItem("didEntries", JSON.stringify(updated));
+    if (!activeDid) setActiveDid(newEntry);
   }
 
-  /**
-   * Download a DID+keypair as a text file
-   */
+  // Download a DID+keypair as a text file
   function handleDownloadKey(did: string, skHex: string, pkHex: string) {
     const content = `DID: ${did}\nPrivate key (hex): ${skHex}\nPublic key (hex): ${pkHex}\n`;
     const blob = new Blob([content], { type: "text/plain" });
@@ -273,44 +281,44 @@ export default function ReviewDApp() {
     URL.revokeObjectURL(link.href);
   }
 
-  /*
-   * Handle delete DID action
-   */
+  // Delete a DID
   function handleDeleteDid(did: string) {
-    // Remove from state
     const updated = didEntries.filter(entry => entry.did !== did);
     setDidEntries(updated);
-    // Sync with localStorage
     localStorage.setItem("didEntries", JSON.stringify(updated));
+    if (activeDid && activeDid.did === did) {
+      setActiveDid(updated[0] || null);
+    }
   }
 
-  /*
-   * Handler for logout, clean all local state and storage
-   */
+  // Logout handler
   function handleLogout() {
     setVc(null);
     setVcStatus(null);
     setDidEntries([]);
     setBannedDids([]);
+    setRevokedDids([]);
+    setActiveDid(null);
     localStorage.removeItem("vc");
     localStorage.removeItem("didEntries");
-    window.location.href = "/"; // Redirect to home
+    localStorage.removeItem("activeDid");
+    setWallet(null);
+    window.location.href = "/";
   }
 
-  // --- Feature disabling logic: ---
-  // Only allow access to Signed Reviews and ZKP Reputation if VC is valid and at least one DID is not banned
+  // Disable features if VC invalid/banned
   const isVCInvalid = vcStatus === "revoked" || vcStatus === "expired";
   const allDIDsBanned = didEntries.length > 0 && bannedDids.length === didEntries.length;
 
-  // -------------- RENDER -----------------
+  // ---------- RENDER ----------
   return (
-      <div className={`relative h-screen w-full text-[#ccccff] font-orbitron bg-gradient-to-b from-[#0f0f1f] via-[#1a0033] to-[#0f0f1f] ${
-          expandedCard
-              ? "overflow-hidden snap-none"
-              : wallet
-                  ? "overflow-y-scroll snap-y snap-mandatory"
-                  : "snap-y snap-mandatory overflow-hidden"
-      }`}>
+      <div className={`relative h-screen w-full text-[#ccccff] font-orbitron bg-gradient-to-b from-[#0f0f1f] via-[#1a0033] to-[#0f0f1f]
+        ${ expandedCard 
+          ? "overflow-hidden snap-none"
+          : wallet
+              ? "overflow-y-scroll snap-y snap-mandatory"
+              : "snap-y snap-mandatory overflow-hidden"
+        }`}>
         {/* Three.js Background Scene */}
         <div className="fixed inset-0 z-0 pointer-events-none">
           <div className="absolute w-full h-full bg-gradient-to-b from-transparent via-transparent to-black" />
@@ -320,9 +328,9 @@ export default function ReviewDApp() {
         {/* Hero section */}
         <section className="relative z-10 h-screen snap-start flex flex-col items-center justify-center text-center px-4">
           <div className="absolute px-8 py-4 rounded-full backdrop-blur-lg bg-white/10 border z-0" style={{ minWidth: "50%" }} />
-          <DecryptingTitle className="relative z-10 text-[50px] md:text-[50px] font-bold text-cyan-300 drop-shadow-[0_0_20px_#00fff7]"
-            text="Your Identity. Your Reviews. Your Control." speed={50}
-          />
+            <DecryptingTitle className="relative z-10 text-[50px] md:text-[50px] font-bold text-cyan-300 drop-shadow-[0_0_20px_#00fff7]"
+                             text="Your Identity. Your Reviews. Your Control." speed={50}
+            />
           <div className="mt-12 flex space-x-[50px] items-center justify-center ">
             <button
                 onClick={wallet ? undefined : connectWallet}
@@ -338,7 +346,10 @@ export default function ReviewDApp() {
               {wallet ? `Wallet Connected` : "Connect Wallet"}
             </button>
             <button
-                onClick={wallet ? scrollToCards : undefined}
+                onClick={wallet ? () => {
+                  const section = document.getElementById("features-section");
+                  if (section) section.scrollIntoView({ behavior: "smooth" });
+                } : undefined}
                 disabled={!wallet}
                 className={clsx(
                     "px-[50px] py-[20px] rounded-full bg-cyan-500/20 text-cyan-300 border-cyan-300/30 transition-all duration-300 backdrop-blur-md",
@@ -351,13 +362,13 @@ export default function ReviewDApp() {
               Explore Features
             </button>
           </div>
+          {walletError && (
+              <div className="text-red-400 font-bold mt-6">{walletError}</div>
+          )}
         </section>
 
-        {/* Features grid and expanded feature panel */}
-        <section
-            id="features-section"
-            className="relative z-10 h-screen snap-start flex bg-gradient-to-b from-transparent to-black"
-        >
+        {/* Features grid and expanded panel */}
+        <section id="features-section" className="relative z-10 h-screen snap-start flex bg-gradient-to-b from-transparent to-black">
           <LayoutGroup>
             {/* Left: Feature selection grid */}
             {!expandedCard && (
@@ -410,7 +421,7 @@ export default function ReviewDApp() {
                 </div>
             )}
 
-            {/* Right: Expanded feature panel (canvas) */}
+            {/* Right: Expanded feature panel */}
             <div className="w-1/2 relative flex items-center justify-center mx-[200px]">
               <AnimatePresence>
                 {expandedCard && (() => {
@@ -465,21 +476,28 @@ export default function ReviewDApp() {
                                         Warning: One or more of your DIDs are <span className="underline">banned</span>!
                                       </div>
                                   )}
-                                  {/* --- Feature-specific panel rendering --- */}
                                   <WalletAccessPanel
                                       vc={vc}
                                       vcStatus={vcStatus}
                                       didEntries={didEntries}
                                       bannedDids={bannedDids}
+                                      revokedDids={revokedDids}
                                       onCreateDid={handleCreateDid}
                                       onDownloadKey={handleDownloadKey}
                                       onLogout={handleLogout}
                                       onDeleteDid={handleDeleteDid}
+                                      activeDid={activeDid}
+                                      setActiveDid={setActiveDid}
                                   />
                                 </>
                             )}
                             {expandedCard === "Signed Reviews" && (
-                                <SignedReviewsPanel wallet={wallet} />
+                                <SignedReviewsPanel
+                                    didEntries={didEntries}
+                                    wallet={wallet}
+                                    refreshKey={refreshSignedReviewsPanel}
+                                    onRefresh={() => setRefreshSignedReviewsPanel(k => k + 1)}
+                                />
                             )}
                             {expandedCard === "ZKP Reputation" && (
                                 <ZKPReputationPanel wallet={wallet} />

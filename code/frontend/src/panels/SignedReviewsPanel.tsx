@@ -2,158 +2,348 @@
 // Copyright 2025 Emanuele Relmi
 
 /**
- * SignedReviewsPanel
- * Main panel for viewing user reputation, listing reviews, and publishing new signed reviews or to edit/revoke existing ones.
+ * Main panel for viewing user reputation, listing reviews and publishing new signed reviews or to edit/revoke existing ones
  */
 
-import { useState, useEffect, useRef } from "react";
+import {useState, useEffect, useCallback} from "react";
+import { ethers } from "ethers";
+import { create as ipfsHttpClient } from "ipfs-http-client";
+
+// Components
 import { ReviewBadgeHeader } from "../components/SignedReviews/ReviewBadgeHeader";
 import { ReviewsTable } from "../components/SignedReviews/ReviewsTable";
-import { NFTSelector } from "../components/SignedReviews/NFTSelector";
 import { ReviewEditor } from "../components/SignedReviews/ReviewEditor";
-import { create as ipfsHttpClient } from "ipfs-http-client";
-import { ethers } from "ethers";
+
+// Contracts and scripts
 import contractAddresses from "../../../scripts/contract-addresses.json";
-import BadgeNFT from "../../../artifacts/contracts/BadgeNFT.sol/BadgeNFT.json";
-import ReviewManager from "../../../artifacts/contracts/ReviewManager.sol/ReviewManager.json";
+import ReviewNFTAbi from "../../../artifacts/contracts/ReviewNFT.sol/ReviewNFT.json";
+import ReviewStorageAbi from "../../../artifacts/contracts/ReviewStorage.sol/ReviewStorage.json";
+import BadgeNFTAbi from "../../../artifacts/contracts/BadgeNFT.sol/BadgeNFT.json";
+import { updateReputation } from "../../../scripts/dApp/appBadgeNFT.js";
 
-const glass = "bg-[white]/10 shadow-neon-cyan backdrop-blur-xl border border-white/20 glass-animate-in";
+// IPFS client setup
+const ipfs = ipfsHttpClient({ url: "http://localhost:5001/api/v0" });
 
-function formatLevel(level: number) {
-    if (level >= 20) return { name: "Gold Reviewer", color: "from-badge-gold via-yellow-300 to-yellow-500" };
-    if (level >= 10) return { name: "Silver Reviewer", color: "from-badge-silver via-gray-200 to-gray-400" };
-    return { name: "Bronze Reviewer", color: "from-badge-bronze via-orange-200 to-orange-500" };
+// Cooldown period for reviews in seconds (24 hours = 86400 seconds)
+const COOLDOWN_SECONDS = 86400;
+
+// Format badge level to display name and color
+function formatBadge(badgeLevel: number) {
+    if (badgeLevel === 3) return { name: "Gold Reviewer", color: "from-yellow-200 via-yellow-300 to-yellow-500" };
+    if (badgeLevel === 2) return { name: "Silver Reviewer", color: "from-gray-200 via-gray-300 to-gray-400" };
+    if (badgeLevel === 1) return { name: "Bronze Reviewer", color: "from-orange-200 via-orange-300 to-orange-500" };
+    return { name: "No Badge", color: "from-slate-200 via-slate-300 to-slate-400" };
 }
 
-export default function SignedReviewsPanel({ wallet }: { wallet: string | null }) {
-    const [badge, setBadge] = useState<any>(null);
-    const [level, setLevel] = useState<number>(0);
-    const [reviews, setReviews] = useState<any[]>([]);
+// Convert timestamp to date string in YYYY-MM-DD format
+function toDateString(ts: number) {
+    return new Date(ts * 1000).toISOString().slice(0, 10);
+}
+
+// Get Ethereum provider from window object (MetaMask)
+function getProvider() {
+    if (typeof window === "undefined" || !window.ethereum) {
+        alert("Please install or unlock MetaMask!");
+        throw new Error("No Ethereum provider found");
+    }
+    return new ethers.BrowserProvider(window.ethereum);
+}
+
+export default function SignedReviewsPanel({ didEntries }: { didEntries: any[] }) {
+    // State variables
+    const [selectedDid, setSelectedDid] = useState<any>(didEntries.length > 0 ? didEntries[0] : null);
     const [userNFTs, setUserNFTs] = useState<any[]>([]);
     const [selectedNFT, setSelectedNFT] = useState<any>(null);
+    const [reviews, setReviews] = useState<any[]>([]);
     const [reviewText, setReviewText] = useState("");
     const [loading, setLoading] = useState(false);
-    const [cid, setCID] = useState("");
     const [submitState, setSubmitState] = useState<"idle" | "success" | "fail">("idle");
+    const [cid, setCid] = useState<string>("");
+    const [badge, setBadge] = useState<any>(null);
+    const [level, setLevel] = useState<number>(0);
 
-    const ipfs = ipfsHttpClient({ url: "http://localhost:5001/api/v0" });
-
-    // Give 5 NFTs to the user on first load (for testing purposes)
-    const initialized = useRef(false);
+    // State to track current time for cooldown calculations
+    const [now, setNow] = useState<number>(Math.floor(Date.now() / 1000));
     useEffect(() => {
-        if (!wallet || initialized.current) return;
-        setUserNFTs(Array.from({ length: 5 }, (_, i) => ({
-            id: 100 + i,
-            productName: `Mock NFT #${i + 1}`,
-            isValid: true,
-            used: false,
-        })));
-        initialized.current = true;
-        console.log("Mock NFTs initialized for wallet:", wallet);
-    }, [wallet]);
+        setNow(Math.floor(Date.now() / 1000));
+    }, [selectedDid, submitState]);
 
-    // Helper to reload all reviews (and badges) after edit/revoke
-    async function reloadAll() {
-        if (!wallet) return;
-        const provider = new ethers.BrowserProvider((window as any).ethereum);
-        const signer = await provider.getSigner();
-        try {
-            const badgeContract = new ethers.Contract(contractAddresses.BadgeNFT, BadgeNFT.abi, signer);
-            const userLevel = await badgeContract.getReputation(wallet);
-            setLevel(Number(userLevel));
-            setBadge(formatLevel(Number(userLevel)));
-        } catch {
-            setLevel(0);
-            setBadge(formatLevel(0));
-        }
-        try {
-            const reviewManager = new ethers.Contract(contractAddresses.ReviewManager, ReviewManager.abi, signer);
-            const userReviews = await reviewManager.getReviewsByUser(wallet);
-            setReviews(userReviews);
-        } catch {
+    // On first render: set DID if not already selected
+    useEffect(() => {
+        if (!selectedDid && didEntries.length > 0) setSelectedDid(didEntries[0]);
+    }, [didEntries, selectedDid]);
+
+    // Reload data whenever selected DID or submit state changes
+    useEffect(() => {
+        if (selectedDid) {
+            reloadNFTs();
+            reloadReviews();
+            reloadBadge();
+        } else {
+            setUserNFTs([]);
             setReviews([]);
+            setBadge(null);
+            setLevel(0);
         }
+        // eslint-disable-next-line
+    }, [selectedDid, submitState, now]);
+
+    // Contract getters
+    function getReviewNFT(signerOrProvider: any) {
+        return new ethers.Contract(contractAddresses.ReviewNFT, ReviewNFTAbi.abi, signerOrProvider);
     }
 
-    useEffect(() => {
-        if (submitState === "success") {
-            const timeout = setTimeout(() => setSubmitState("idle"), 2200);
-            return () => clearTimeout(timeout);
+    function getReviewStorage(signerOrProvider: any) {
+        return new ethers.Contract(contractAddresses.ReviewStorage, ReviewStorageAbi.abi, signerOrProvider);
+    }
+
+    function getBadgeNFT(signerOrProvider: any) {
+        return new ethers.Contract(contractAddresses.BadgeNFT, BadgeNFTAbi.abi, signerOrProvider);
+    }
+
+    // Download text content from IPFS CID
+    async function downloadTextFromIPFS(cid: string): Promise<string> {
+        const stream = ipfs.cat(cid);
+        let data = "";
+        for await (const chunk of stream) {
+            data += new TextDecoder().decode(chunk);
         }
-    }, [submitState]);
+        return data;
+    }
 
+    // Reload available NFTs for this DID
+    async function reloadNFTs() {
+        if (!selectedDid) return;
+        setLoading(true);
+        try {
+            const provider = getProvider();
+            const reviewNFT = getReviewNFT(provider);
+            const reviewStorage = getReviewStorage(provider);
+
+            const tokenIds = await reviewNFT.getTokensOfDID(selectedDid.did);
+            const reviewIds = await reviewStorage.getReviewsByAuthor(selectedDid.did);
+
+            const usedTokenIds = new Set(
+                (await Promise.all(
+                    reviewIds.map(async id => {
+                        const [, isRevoked, , tokenId] = await reviewStorage.getLatestReview(id);
+                        return !isRevoked ? Number(tokenId) : null;
+                    })
+                )).filter(x => x !== null)
+            );
+
+            const nftObjs = [];
+            for (const id of tokenIds) {
+                const status = await reviewNFT.getNFTStatus(id);
+                const validForReview = await reviewNFT.isValidForReview(id);
+                const isUsed = usedTokenIds.has(Number(id));
+                nftObjs.push({
+                    id: Number(id),
+                    productName: `NFT #${id}`,
+                    status: Number(status),
+                    isValid: Number(status) === 0 && validForReview && !isUsed
+                });
+            }
+            setUserNFTs(nftObjs);
+        } catch (e) {
+            console.error("Failed to load NFTs:", e);
+            setUserNFTs([]);
+        }
+        setLoading(false);
+    }
+
+    // Reload reviews for the selected DID
+    async function reloadReviews() {
+        if (!selectedDid) return;
+        setLoading(true);
+        try {
+            const provider = getProvider();
+            const reviewStorage = getReviewStorage(provider);
+            const reviewIds = await reviewStorage.getReviewsByAuthor(selectedDid.did);
+            const reviewData = await Promise.all(
+                reviewIds.map(async (id: any) => {
+                    const [cid, isRevoked, lastUpdate, tokenId, numEdits] = await reviewStorage.getLatestReview(id);
+                    let reviewText;
+                    try {
+                        reviewText = await downloadTextFromIPFS(cid);
+                    } catch {
+                        reviewText = "[IPFS not available]";
+                    }
+                    const isCooldownActive = Number(numEdits) > 0 && (now - Number(lastUpdate)) < COOLDOWN_SECONDS;
+                    return {
+                        reviewId: Number(id),
+                        cid,
+                        reviewText,
+                        isRevoked,
+                        lastUpdate: Number(lastUpdate),
+                        nftId: Number(tokenId),
+                        did: selectedDid.did,
+                        canEdit: !isRevoked && !isCooldownActive,
+                        canRevoke: !isRevoked,
+                        productName: `NFT #${tokenId}`,
+                        isValid: !isRevoked,
+                        lastEditDate: toDateString(Number(lastUpdate)),
+                        cooldownActive: isCooldownActive,
+                        cooldownRemaining: isCooldownActive ? COOLDOWN_SECONDS - (now - Number(lastUpdate)) : 0,
+                        numEdits: Number(numEdits),
+                    };
+                })
+            );
+            setReviews(reviewData);
+        } catch (e) {
+            console.error("Failed to load reviews:", e);
+            setReviews([]);
+        }
+        setLoading(false);
+    }
+
+    // Reload badge and reputation level for the selected DID
+    const reloadBadge = useCallback(async () => {
+        if (!selectedDid) return;
+        try {
+            const provider = getProvider();
+            const badgeNFT = getBadgeNFT(provider);
+            const rep = await badgeNFT.getReputation(selectedDid.did);
+            setLevel(Number(rep));
+            const badgeLevel = await badgeNFT.getUserBadge(selectedDid.did);
+            setBadge(formatBadge(Number(badgeLevel)));
+        } catch {
+            setLevel(0);
+            setBadge(formatBadge(0));
+        }
+    }, [selectedDid]);
+
+    // Set up interval to reload badge every second when DID is selected
     useEffect(() => {
-        reloadAll();
-        // eslint-disable-next-line
-    }, [wallet, submitState]);
+        if (selectedDid) {
+            const interval = setInterval(() => {
+                reloadBadge();
+            }, 1000);
+            return () => clearInterval(interval);
+        }
+    }, [reloadBadge, selectedDid]);
 
-    // Handle submit new review
-    const handleSubmitReview = async () => {
+    // Handle minting a new NFT for the selected DID
+    async function handleMintNFT() {
+        if (!selectedDid) return;
+        setLoading(true);
+        try {
+            const provider = getProvider();
+            const signer = await provider.getSigner();
+            const reviewNFT = getReviewNFT(signer);
+            const productId = Math.floor(Math.random() * 1000) + 1;
+            const tokenURI = "ipfs://placeholder-info";
+
+            alert("Confirm the transaction in MetaMask to mint the NFT");
+            const tx = await reviewNFT.mintNFT(selectedDid.did, productId, tokenURI);
+            await tx.wait();
+
+            await reloadNFTs();
+        } catch (e: any) {
+            alert("Mint NFT failed: " + (e?.message || e));
+        }
+        setLoading(false);
+    }
+
+    // Handle submitting a new review
+    async function handleSubmitReview() {
+        if (!selectedNFT || !selectedDid || !reviewText) return;
         setLoading(true);
         setSubmitState("idle");
         try {
-            const ipfsRes = await ipfs.add(reviewText);
-            setCID(ipfsRes.cid.toString());
-            const provider = new ethers.BrowserProvider((window as any).ethereum);
-            const signer = await provider.getSigner();
-            const reviewManager = new ethers.Contract(contractAddresses.ReviewManager, ReviewManager.abi, signer);
-            await reviewManager.submitReview(selectedNFT.id, ipfsRes.cid.toString());
+            const result = await ipfs.add(reviewText);
+            const reviewCid = result.cid.toString();
+            setCid(reviewCid);
 
-            // Remove the used NFT
-            setUserNFTs(prevNFTs => prevNFTs.filter(nft => nft.id !== selectedNFT.id));
+            const provider = getProvider();
+            const signer = await provider.getSigner();
+            const reviewStorage = getReviewStorage(signer);
+
+            alert("Confirm the transaction in MetaMask to publish the review");
+            const tx = await reviewStorage.storeReview(selectedDid.did, Number(selectedNFT.id), reviewCid);
+            await tx.wait();
+
+            alert("Confirm this second transaction in MetaMask to update your reputation");
+            try {
+                await updateReputation(signer, selectedDid.did, 1);
+            } catch (e) {
+                console.warn("Failed to update reputation:", e);
+            }
 
             setReviewText("");
             setSelectedNFT(null);
+
+            setNow(Math.floor(Date.now() / 1000));
+            await reloadReviews();
+            await reloadNFTs();
+            await reloadBadge();
             setSubmitState("success");
-            await reloadAll();
-        } catch (e) {
+        } catch (e: any) {
             setSubmitState("fail");
+            alert("Failed to publish review: " + (e?.message || e));
         }
         setLoading(false);
-    };
+    }
 
-    /**
-     * Edits an existing review by uploading new text to IPFS and updating on-chain.
-     * @param review The review object (must contain nftId)
-     * @param newText The new review text
-     */
-    const handleEdit = async (review: any, newText: string) => {
-        const provider = new ethers.BrowserProvider((window as any).ethereum);
-        const signer = await provider.getSigner();
-        const reviewManager = new ethers.Contract(contractAddresses.ReviewManager, ReviewManager.abi, signer);
+    // Handle editing an existing review
+    async function handleEdit(review: any, newText: string) {
+        if (!selectedDid || !review.canEdit) return;
+        setLoading(true);
+        try {
+            const result = await ipfs.add(newText);
+            const newCid = result.cid.toString();
+            const provider = getProvider();
+            const signer = await provider.getSigner();
+            const reviewStorage = getReviewStorage(signer);
 
-        // Upload new text to IPFS
-        const ipfsRes = await ipfs.add(newText);
-        const newCid = ipfsRes.cid.toString();
+            alert("Confirm the transaction in MetaMask to edit the review");
+            const tx = await reviewStorage.updateReview(review.reviewId, newCid, selectedDid.did);
+            await tx.wait();
 
-        // Call smart contract to update the review
-        await reviewManager.editReview(review.nftId, newCid);
+            setNow(Math.floor(Date.now() / 1000));
+            await reloadReviews();
+            await reloadBadge();
+        } catch (e: any) {
+            alert("Failed to update review: " + (e?.message || e));
+        }
+        setLoading(false);
+    }
 
-        // Reload all data
-        await reloadAll();
-    };
+    // Handle revoking an existing review
+    async function handleRevoke(review: any) {
+        if (!selectedDid || !review.canRevoke) return;
+        setLoading(true);
+        try {
+            const provider = getProvider();
+            const signer = await provider.getSigner();
+            const reviewStorage = getReviewStorage(signer);
 
-    /**
-     * Revokes an existing review by calling the smart contract.
-     * @param review The review object (must contain nftId)
-     */
-    const handleRevoke = async (review: any) => {
-        const provider = new ethers.BrowserProvider((window as any).ethereum);
-        const signer = await provider.getSigner();
-        const reviewManager = new ethers.Contract(contractAddresses.ReviewManager, ReviewManager.abi, signer);
+            alert("Confirm the transaction in MetaMask to revoke the review");
+            const tx = await reviewStorage.revokeReview(review.reviewId, selectedDid.did);
+            await tx.wait();
 
-        await reviewManager.revokeReview(review.nftId);
+            alert("Confirm this second transaction in MetaMask to update your reputation");
+            try {
+                await updateReputation(signer, selectedDid.did, -1);
+            } catch (e) {
+                console.warn("Failed to update reputation:", e);
+            }
 
-        // Reload all data
-        await reloadAll();
-    };
+            setNow(Math.floor(Date.now() / 1000));
+            await reloadReviews();
+            await reloadNFTs();
+            await reloadBadge();
+        } catch (e: any) {
+            alert("Failed to revoke review: " + (e?.message || e));
+        }
+        setLoading(false);
+    }
 
-    console.log("Mock NFTs:", userNFTs);
-
+    // ---------- RENDER ----------
     return (
         <div className="flex flex-row w-full h-auto gap-8 p-4 mt-[25px]">
-            {/* Left: reputation + table */}
-            <div className={`flex-1 rounded-[36px] flex flex-col items-center p-8 mr-4`}>
+            {/* Left: badge and reviews */}
+            <div className="flex-1 rounded-[36px] flex flex-col items-center p-8 mr-4">
                 <ReviewBadgeHeader level={level} badge={badge} />
                 <ReviewsTable
                     reviews={reviews}
@@ -161,12 +351,59 @@ export default function SignedReviewsPanel({ wallet }: { wallet: string | null }
                     onRevoke={handleRevoke}
                 />
             </div>
-            {/* Right: NFT selector + editor */}
-            <div className={`flex-1 rounded-[36px] flex flex-col items-center p-8 ml-4`}>
+            {/* Right: DID selector + NFT selector + review editor */}
+            <div className="flex-1 rounded-[36px] flex flex-col items-center p-8 ml-4">
                 <h3 className="text-[20px] mb-3 font-bold text-cyan-300">Publish a new review</h3>
-                { /* NFT Selector */ }
+                <button
+                    className="mb-4 px-4 py-2 min-w-[120px] min-h-[50px] h-auto w-auto text-[20px] font-[800] rounded-full
+                    bg-cyan-500 hover:bg-cyan-600 transition flex items-center justify-center gap-2"
+                    onClick={handleMintNFT}
+                    disabled={loading || !selectedDid}
+                >
+                    Mint NFT
+                </button>
                 <div className="flex flex-col md:flex-row w-full gap-4 mb-4 justify-between items-center mx-auto mt-[20px] flex-1">
-                    <NFTSelector nfts={userNFTs} selected={selectedNFT} setSelected={setSelectedNFT} />
+                    <div className="flex flex-col items-center justify-center">
+                        <label className="mb-1 text-[18px] font-bold">Select DID:</label>
+                        <select
+                            className="px-4 py-2 rounded-xl bg-gray-900 text-cyan-200 font-mono border-2 border-cyan-400/40 text-[15px]"
+                            value={selectedDid?.did || ""}
+                            onChange={e => {
+                                const entry = didEntries.find(d => d.did === e.target.value);
+                                setSelectedDid(entry);
+                                setSelectedNFT(null);
+                            }}
+                            disabled={didEntries.length === 0}
+                        >
+                            <option value="" disabled>Select a DID</option>
+                            {didEntries.map(entry => (
+                                <option key={entry.did} value={entry.did}>{entry.did} {entry.vcName ? `(${entry.vcName})` : ""}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="flex flex-col mt-[2%] items-center justify-center">
+                        <label className="mb-1 text-[18px] font-bold">Select NFT:</label>
+                        <select
+                            className="px-4 py-2 rounded-xl bg-gray-900 text-cyan-200 font-mono border-2 border-cyan-400/40 max-w-[100px] w-auto text-[15px]"
+                            value={selectedNFT?.id || ""}
+                            onChange={e => {
+                                const nft = userNFTs.find(n => String(n.id) === e.target.value);
+                                setSelectedNFT(nft);
+                            }}
+                            disabled={userNFTs.length === 0}
+                        >
+                            <option value="" disabled>Select an NFT</option>
+                            {userNFTs.map(nft => (
+                                <option
+                                    key={nft.id}
+                                    value={nft.id}
+                                    disabled={!nft.isValid}
+                                >
+                                    {`NFT #${nft.id}`}{!nft.isValid ? " (used/expired)" : ""}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
                 <ReviewEditor
                     selectedNFT={selectedNFT}

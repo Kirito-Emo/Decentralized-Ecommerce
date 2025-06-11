@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: Apache 2.0
 // Copyright 2025 Emanuele Relmi
 
+/**
+ * Express backend for decentralized reviews: handles only authentication, admin actions and NFT mint/expire
+ */
+
 import express from "express";
 import bodyParser from "body-parser";
 import { XMLParser } from "fast-xml-parser";
@@ -11,9 +15,9 @@ import { ethers } from "ethers";
 import fs from "fs";
 import path from "path";
 
-// Import contract interaction helpers
-const appBanRegistry = require("../scripts/dApp-scripts/appBanRegistry.js");
-const appVCRegistry = require("../scripts/dApp-scripts/appVCRegistry.js");
+// Contract helpers for admin actions
+const appBanRegistry = require("../scripts/dApp/appBanRegistry.js");
+const appVCRegistry = require("../scripts/dApp/appVCRegistry.js");
 
 // Load issuer from JSON file
 const issuer = JSON.parse(fs.readFileSync(path.join(__dirname, "../scripts/interact/issuer-did.json"), "utf8"));
@@ -28,7 +32,7 @@ app.use(cors({ origin: "http://localhost:5173", credentials: true }));
 
 const PORT = 8082;
 
-// Get hash for user identity
+// Hash generation for user identity
 function getUserHash({ name, surname, birthDate, nationality }: any) {
 	const str = `${name}|${surname}|${birthDate}|${nationality}`;
 	return crypto.createHash("sha256").update(str).digest("hex");
@@ -52,17 +56,20 @@ function validateUserData({ name, surname, birthDate, nationality }: any) {
 		throw new Error("Input fields out of range");
 }
 
+// ---------------- VC/Authentication ----------------
+
 // --- HTML login page with dual SPID + VC buttons ---
 app.get("/login", (_req, res) => {
 	res.send(`
-    <html lang="it">
-      <body>
-        <form method="POST" action="http://localhost:8443/sso">
-          <input type="submit" value="Login with SPID" />
-        </form>
-      </body>
-    </html>
-  `);
+		<!DOCTYPE html>
+		<html lang="it">
+			<body>
+				<form method="POST" action="http://localhost:8443/sso">
+					<input type="submit" value="Login with SPID" />
+				</form>
+			</body>
+		</html>
+	`);
 });
 
 // --- SAML Assertion POST endpoint (SPID) ---
@@ -82,7 +89,7 @@ app.post("/assert", (req, res) => {
 			issuanceDate: new Date().toISOString(),
 			credentialSubject: {
 				id: nameID,
-				name: "Test User (SPID)"
+				name: "SPID User"
 			}
 		};
 		const vcBase64 = Buffer.from(JSON.stringify(vc)).toString("base64");
@@ -95,18 +102,19 @@ app.post("/assert", (req, res) => {
 // --- SSI/VC: login-vc form ---
 app.get("/login-vc", (_req, res) => {
 	res.send(`
-    <html lang="it">
-      <body>
-        <form method="POST" action="/login-vc">
-          <input name="name" placeholder="Name" required /><br/>
-          <input name="surname" placeholder="Surname" required /><br/>
-          <input type="date" name="birthDate" placeholder="Birthdate (YYYY-MM-DD)" required /><br/>
-          <input name="nationality" placeholder="Nationality" required /><br/>
-          <button type="submit">Get VC</button>
-        </form>
-      </body>
-    </html>
-    `);
+		<!DOCTYPE html>
+		<html lang="it">
+			<body>
+				<form method="POST" action="/login-vc">
+					<input name="name" placeholder="Name" required /><br/>
+					<input name="surname" placeholder="Surname" required /><br/>
+					<input type="date" name="birthDate" placeholder="Birthdate (YYYY-MM-DD)" required /><br/>
+					<input name="nationality" placeholder="Nationality" required /><br/>
+					<button type="submit">Get VC</button>
+				</form>
+			</body>
+		</html>
+	`);
 });
 
 // --- Issue VC via SSI ---
@@ -127,33 +135,32 @@ app.post("/login-vc", async (req, res) => {
 			credentialSubject: { id: userHash, name, surname, birthDate, nationality, ipfsCid: cid }
 		};
 		const vcBase64 = Buffer.from(JSON.stringify(vc)).toString("base64");
-
-		// Serve page that postMessages to opener and closes itself
 		res.send(`
-	      <html lang="en">
-	        <head>
-	          <meta charset="utf-8" />
-	          <title>VC Issued</title>
-	        </head>
-	        <body style="font-family:Orbitron,sans-serif;background:#eef5fa;text-align:center;padding:50px;">
-	          <h2>Verifiable Credential Issued</h2>
-	          <pre style="display:inline-block;text-align:left;padding:12px 18px;background:#f5f5fa;border-radius:8px;">${JSON.stringify(vc, null, 2)}</pre>
-	          <p style="margin-top:30px;color:#555;">This window will close automatically.</p>
-	          <script>
-	            if (window.opener) {
-	              window.opener.postMessage({ type: "VC_LOGIN", vc: "${vcBase64}" }, "http://localhost:5173");
-	              setTimeout(() => window.close(), 1000);
-	            }
-	          </script>
-	        </body>
-	      </html>
-	    `);
+			<!DOCTYPE html>
+			<html lang="it">
+				<head>
+					<meta charset="utf-8" />
+					<title>VC Issued</title>
+				</head>
+				<body style="font-family:Orbitron,sans-serif;background:#eef5fa;text-align:center;padding:50px;">
+					<h2>Verifiable Credential Issued</h2>
+					<pre style="display:inline-block;text-align:left;padding:12px 18px;background:#f5f5fa;border-radius:8px;">${JSON.stringify(vc, null, 2)}</pre>
+					<p style="margin-top:30px;color:#555;">This window will close automatically.</p>
+					<script>
+						if (window.opener) {
+							window.opener.postMessage({ type: "VC_LOGIN", vc: "${vcBase64}" }, "http://localhost:5173");
+							setTimeout(() => window.close(), 1000);
+						}
+					</script>
+				</body>
+			</html>
+		`);
 	} catch (err) {
 		res.status(500).json({ error: (err as Error).message });
 	}
 });
 
-// ----------- Routes -------------
+// ----------- ADMIN & SYSTEM CONTRACT ROUTES -----------
 
 // Ban a DID (admin)
 app.post("/ban-did", async (req, res) => {
@@ -185,7 +192,7 @@ app.post("/unban-did", async (req, res) => {
 	}
 });
 
-// Revoke a VC (admin action)
+// VC revoke (admin)
 app.post("/revoke-vc", async (req, res) => {
 	try {
 		const { vcHash } = req.body;
@@ -201,7 +208,7 @@ app.post("/revoke-vc", async (req, res) => {
 });
 
 // Fetch the latest ban-list CID
-app.get("/ban-list-cid", async (req, res) => {
+app.get("/ban-list-cid", async (_req, res) => {
 	try {
 		const cid = await appBanRegistry.getBanListCID();
 		res.json({ cid });
@@ -210,8 +217,8 @@ app.get("/ban-list-cid", async (req, res) => {
 	}
 });
 
-// Fetch the latest emitted VC list CID
-app.get("/vc-emitted-list-cid", async (req, res) => {
+// Fetch the latest VC emitted list CID
+app.get("/vc-emitted-list-cid", async (_req, res) => {
 	try {
 		const cid = await appVCRegistry.getEmittedListCID();
 		res.json({ cid });
@@ -220,8 +227,8 @@ app.get("/vc-emitted-list-cid", async (req, res) => {
 	}
 });
 
-// Fetch the latest revoked VC list CID
-app.get("/vc-revoked-list-cid", async (req, res) => {
+// Fetch the latest VC revoked list CID
+app.get("/vc-revoked-list-cid", async (_req, res) => {
 	try {
 		const cid = await appVCRegistry.getRevokedListCID();
 		res.json({ cid });
@@ -230,6 +237,23 @@ app.get("/vc-revoked-list-cid", async (req, res) => {
 	}
 });
 
+// EXPIRE NFTs (should be called via cronjob)
+app.post("/expire-nfts", async (req, res) => {
+	try {
+		const { tokenIds } = req.body;
+		if (!Array.isArray(tokenIds) || tokenIds.length === 0) {
+			res.status(400).json({ error: "tokenIds required" });
+			return;
+		}
+		const { expireNFTs } = require("../scripts/dApp/appReviewNFT.js");
+		const tx = await expireNFTs(signer, tokenIds);
+		res.json({ status: "expired", txHash: tx.hash });
+	} catch (err) {
+		res.status(500).json({ error: (err as Error).message });
+	}
+});
+
+// Server start
 app.listen(PORT, () => {
 	console.log(`Backend running at http://localhost:${PORT}`);
 });

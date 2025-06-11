@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2025 Emanuele Relmi
 
+/*
+ * Decentralized Identifier (DID) management table component
+ */
+
 import { ArrowDownCircle, X, Ban, Check, Trash2 } from "lucide-react";
 
 interface DIDEntry {
@@ -68,11 +72,11 @@ export function DIDTable({
                                     <td className="px-4 py-2 text-[15px] break-all">{entry.did}</td>
                                     <td className="px-4 py-2 text-center">
                                         {isRevoked ? (
-                                            <span className="inline-block px-2 py-1 bg-red-700 text-white text-xs rounded-full font-bold"><X /></span>
+                                            <span className="inline-block px-2 py-1 bg-red-700 text-white text-xs rounded-full font-bold" title="Revoked DID"><X /></span>
                                         ) : isBanned ? (
-                                            <span className="inline-block px-2 py-1 bg-yellow-600 text-white text-xs rounded-full font-bold"><Ban /></span>
+                                            <span className="inline-block px-2 py-1 bg-yellow-600 text-white text-xs rounded-full font-bold" title="Banned DID"><Ban /></span>
                                         ) : (
-                                            <span className="inline-block px-2 py-1 bg-emerald-700 text-white text-xs rounded-full font-bold"><Check /></span>
+                                            <span className="inline-block px-2 py-1 bg-emerald-700 text-white text-xs rounded-full font-bold" title="Active DID"><Check /></span>
                                         )}
                                     </td>
                                     <td className="px-4 py-2 text-center">
@@ -85,15 +89,15 @@ export function DIDTable({
                                         </button>
                                     </td>
                                     <td className="px-4 py-2 text-center">
-                                    {onDeleteDid && (
-                                        <button
-                                            onClick={() => onDeleteDid(entry.did)}
-                                            className="bg-[#c9b6fc] border-[#8ec5e6] hover:bg-[#fffbb1] rounded-full w-[30px] h-[30px] flex items-center justify-center mx-auto shadow-neon-cyan transition"
+                                        {onDeleteDid && (
+                                            <button
+                                                onClick={() => onDeleteDid(entry.did)}
+                                                className="bg-[#c9b6fc] border-[#8ec5e6] hover:bg-[#fffbb1] rounded-full w-[30px] h-[30px] flex items-center justify-center mx-auto shadow-neon-cyan transition"
                                                 title="Delete DID"
-                                        >
-                                            <Trash2 className="w-[20px] h-[20px] text-red-700" />
-                                        </button>
-                                    )}
+                                            >
+                                                <Trash2 className="w-[20px] h-[20px] text-red-700" />
+                                            </button>
+                                        )}
                                     </td>
                                 </tr>
                             );

@@ -2,7 +2,6 @@
 // Copyright 2025 Emanuele Relmi
 
 /**
- * VCCard
  * Verifiable Credential display card
  */
 

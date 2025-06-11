@@ -2,7 +2,6 @@
 // Copyright 2025 Emanuele Relmi
 
 /**
- * WalletAccessPanel
  * Panel for VC display and DID management
  */
 
