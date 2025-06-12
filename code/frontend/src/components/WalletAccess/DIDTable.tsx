@@ -11,7 +11,9 @@ interface DIDEntry {
     did: string;
     skHex?: string;
     pkHex?: string;
+    identityCommitment?: string;
     vcName?: string;
+    joinedSemaphore?: boolean; // track Semaphore group status
 }
 
 interface DIDTableProps {
@@ -21,6 +23,7 @@ interface DIDTableProps {
     onCreateDid: () => void;
     onDownloadKey: (did: string, skHex: string, pkHex: string) => void;
     onDeleteDid?: (did: string) => void;
+    onJoinSemaphoreGroup?: (didEntry: DIDEntry) => void;
 }
 
 export function DIDTable({
@@ -29,7 +32,8 @@ export function DIDTable({
                              revokedDids = [],
                              onCreateDid,
                              onDownloadKey,
-                             onDeleteDid
+                             onDeleteDid,
+                             onJoinSemaphoreGroup
 }: DIDTableProps) {
     const sortedEntries = [...didEntries].sort((a, b) => a.did.localeCompare(b.did));
 
@@ -52,12 +56,13 @@ export function DIDTable({
                         <th className="p-2 border-b border-cyan-300">Status</th>
                         <th className="p-2 border-b border-cyan-300">Download</th>
                         <th className="p-2 border-b border-cyan-300">Delete</th>
+                        <th className="p-2 border-b border-cyan-300">Semaphore</th>
                     </tr>
                     </thead>
                     <tbody>
                     {sortedEntries.length === 0 ? (
                         <tr>
-                            <td colSpan={6} className="p-4 text-center text-gray-500 border-b border-cyan-200">
+                            <td colSpan={7} className="p-4 text-center text-gray-500 border-b border-cyan-200">
                                 No DIDs yet. Click "New DID" to create one.
                             </td>
                         </tr>
@@ -82,7 +87,7 @@ export function DIDTable({
                                     <td className="px-4 py-2 text-center">
                                         <button
                                             onClick={() => onDownloadKey(entry.did, entry.skHex ?? "", entry.pkHex ?? "")}
-                                            className="bg-[#c9b6fc] border-[#8ec5e6] hover:bg-[#fffbb1] rounded-full w-[30px] h-[30px] flex items-center justify-center mx-auto shadow-neon-cyan transition"
+                                            className="bg-[#c9b6fc] border-[#8ec5e6] hover:bg-[#fffbb1] rounded-full w-[40px] h-[40px] flex items-center justify-center mx-auto shadow-neon-cyan transition"
                                             title="Download Keys"
                                         >
                                             <ArrowDownCircle className="w-[26px] h-[26px] text-cyan-400 drop-shadow-[0_0_10px_#00fff7] animate-glow" />
@@ -92,11 +97,26 @@ export function DIDTable({
                                         {onDeleteDid && (
                                             <button
                                                 onClick={() => onDeleteDid(entry.did)}
-                                                className="bg-[#c9b6fc] border-[#8ec5e6] hover:bg-[#fffbb1] rounded-full w-[30px] h-[30px] flex items-center justify-center mx-auto shadow-neon-cyan transition"
+                                                className="bg-[#c9b6fc] border-[#8ec5e6] hover:bg-[#fffbb1] rounded-full w-[40px] h-[40px] flex items-center justify-center mx-auto shadow-neon-cyan transition"
                                                 title="Delete DID"
                                             >
                                                 <Trash2 className="w-[20px] h-[20px] text-red-700" />
                                             </button>
+                                        )}
+                                    </td>
+                                    {/* Semaphore group join logic */}
+                                    <td className="px-4 py-2 text-center">
+                                        {onJoinSemaphoreGroup && !entry.joinedSemaphore && (
+                                            <button
+                                                onClick={() => onJoinSemaphoreGroup(entry)}
+                                                className="bg-[#c9b6fc] border-[#8ec5e6] hover:bg-[#fffbb1] rounded-full w-[120px] h-[60px] text-[15px] font-[600] flex items-center justify-center mx-auto shadow-neon-cyan transition"
+                                                title="Join Semaphore Group"
+                                            >
+                                                Join Semaphore
+                                            </button>
+                                        )}
+                                        {entry.joinedSemaphore && (
+                                            <span className="inline-block px-2 py-1 bg-emerald-400/80 text-white text-xs rounded-full font-bold">In group</span>
                                         )}
                                     </td>
                                 </tr>

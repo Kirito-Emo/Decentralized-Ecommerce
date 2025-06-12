@@ -11,7 +11,7 @@ function toHex(arr: Uint8Array): string {
 
 export async function generateEd25519DID() {
     const sk = ed25519.utils.randomPrivateKey();
-    const pk = await ed25519.getPublicKey(sk);
+    const pk = ed25519.getPublicKey(sk);
     const skHex = toHex(sk);
     const pkHex = toHex(pk);
 

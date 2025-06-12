@@ -9,16 +9,22 @@ import { VCCard } from "../components/WalletAccess/VCCard";
 import { DIDTable } from "../components/WalletAccess/DIDTable";
 import { motion } from "framer-motion";
 
+// Import Semaphore contract ABI and addresses for on-chain group join
+import SemaphoreABI from "../../../artifacts/contracts/Semaphore.sol/Semaphore.json";
+import contractAddresses from "../../../scripts/contract-addresses.json";
+import { Contract, BrowserProvider } from "ethers";
+
 interface WalletAccessPanelProps {
     vc: any;
     vcStatus?: "valid" | "revoked" | "expired" | null;
-    didEntries: { did: string; skHex?: string; pkHex?: string; vcName?: string; }[];
+    didEntries: { did: string; skHex?: string; pkHex?: string; identityCommitment?: string; vcName?: string; joinedSemaphore?: boolean }[];
     bannedDids?: string[];
     revokedDids?: string[];
     onCreateDid: () => void;
     onDownloadKey: (did: string, skHex: string, pkHex: string) => void;
     onLogout?: () => void;
     onDeleteDid?: (did: string) => void;
+    onDidJoinSemaphore?: (did: string) => void; // callback to update parent state when a DID joins Semaphore
 }
 
 export default function WalletAccessPanel({
@@ -31,7 +37,41 @@ export default function WalletAccessPanel({
                                               onDownloadKey,
                                               onLogout,
                                               onDeleteDid,
-                                          }: WalletAccessPanelProps) {
+                                              onDidJoinSemaphore
+}: WalletAccessPanelProps) {
+
+    /**
+     * Join a Semaphore group on-chain using ethers.js and update parent state
+     */
+    async function handleJoinSemaphoreGroup(didEntry: any) {
+        try {
+            if (!(window as any).ethereum) {
+                alert("Please install MetaMask to use this feature.");
+                return;
+            }
+            const semaphoreAddress = contractAddresses["Semaphore"];
+            const provider = new BrowserProvider((window as any).ethereum);
+            const signer = await provider.getSigner();
+            const contract = new Contract(semaphoreAddress, SemaphoreABI.abi, signer);
+            const counter = await contract.groupCounter(); // Get the latest group counter
+            const groupId = counter - 1n; // Get the latest group ID (assuming groups are sequentially numbered)
+            const identityCommitment = didEntry.identityCommitment || "";
+            if (!identityCommitment) {
+                alert("No identityCommitment found for this DID.");
+                return;
+            }
+            // Call addMember on Semaphore contract
+            const tx = await contract.addMember(groupId, identityCommitment);
+            await tx.wait();
+            alert("DID successfully joined Semaphore group!");
+
+            // Callback to update parent state (will set joinedSemaphore=true)
+            if (onDidJoinSemaphore) onDidJoinSemaphore(didEntry.did);
+        } catch (err: any) {
+            alert("Error joining Semaphore group: " + (err?.message || err));
+        }
+    }
+
     return (
         <motion.div
             className="backdrop-blur-2xl shadow-neon-cyan rounded-3xl p-8 glass-animate-in flex flex-row w-full h-full gap-8"
@@ -54,7 +94,7 @@ export default function WalletAccessPanel({
                                 Credential expired
                             </div>
                         )}
-                        {/* --- LOGOUT BUTTON centered below VCCard --- */}
+                        {/* --- LOGOUT BUTTON --- */}
                         {onLogout && (
                             <button
                                 onClick={onLogout}
@@ -89,7 +129,7 @@ export default function WalletAccessPanel({
             </div>
 
             {/* RIGHT SIDE: DID Table */}
-            <div className="flex-1 flex flex-col items-center justify-center mt-[5%]">
+            <div className="flex-1 flex flex-col items-center justify-center mt-[5%] mx-auto ml-[8%]">
                 <DIDTable
                     didEntries={didEntries}
                     bannedDids={bannedDids}
@@ -97,6 +137,7 @@ export default function WalletAccessPanel({
                     onCreateDid={onCreateDid}
                     onDownloadKey={onDownloadKey}
                     onDeleteDid={onDeleteDid}
+                    onJoinSemaphoreGroup={handleJoinSemaphoreGroup}
                 />
             </div>
         </motion.div>

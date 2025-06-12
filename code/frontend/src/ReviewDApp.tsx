@@ -8,11 +8,12 @@
 
 import { useEffect, useState } from "react";
 import Scene from "./Scene";
-import { IdCard, MessageSquareText, ShieldUser } from "lucide-react";
+import { IdCard, MessageSquareText, ShieldUser, CircleX } from "lucide-react";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import clsx from "clsx";
 import { ethers } from "ethers";
 import { generateEd25519DID } from "./utils/generateEd25519DID";
+import { Identity } from "@semaphore-protocol/identity";
 
 // --- Import modular panels ---
 import WalletAccessPanel from "./panels/WalletAccessPanel.tsx";
@@ -78,6 +79,9 @@ export default function ReviewDApp() {
   const [bannedDids, setBannedDids] = useState<string[]>([]);
   const [revokedDids, setRevokedDids] = useState<string[]>([]);
   const [refreshSignedReviewsPanel, setRefreshSignedReviewsPanel] = useState(0);
+
+  // State for BBS+ keypair (used by BBS proof, generated on demand)
+  const [userKeyPair, setUserKeyPair] = useState<any>(null);
 
   // ---- Robust connect wallet handler ----
   const connectWallet = async () => {
@@ -258,10 +262,15 @@ export default function ReviewDApp() {
   // DID handlers
   async function handleCreateDid() {
     const didData = await generateEd25519DID();
+    const identity = new Identity(didData.skHex);
+    const identityCommitment = identity.commitment.toString();
+    const identitySeed = didData.skHex; // Use private key as identity seed (Semaphore) for simplicity
     const newEntry = {
       did: didData.did,
       skHex: didData.skHex,
       pkHex: didData.pkHex,
+      identitySeed,
+      identityCommitment,
       vcName: vc?.credentialSubject?.name || "–"
     };
     const updated = [...didEntries, newEntry];
@@ -270,7 +279,7 @@ export default function ReviewDApp() {
     if (!activeDid) setActiveDid(newEntry);
   }
 
-  // Download a DID+keypair as a text file
+  // Download a DID + keypair as a text file
   function handleDownloadKey(did: string, skHex: string, pkHex: string) {
     const content = `DID: ${did}\nPrivate key (hex): ${skHex}\nPublic key (hex): ${pkHex}\n`;
     const blob = new Blob([content], { type: "text/plain" });
@@ -306,6 +315,17 @@ export default function ReviewDApp() {
     window.location.href = "/";
   }
 
+  // Handle DID joining Semaphore group (update state)
+  function handleDidJoinSemaphore(did: string) {
+    const updated = didEntries.map(entry =>
+        entry.did === did
+            ? { ...entry, joinedSemaphore: true }
+            : entry
+    );
+    setDidEntries(updated);
+    localStorage.setItem("didEntries", JSON.stringify(updated));
+  }
+
   // Disable features if VC invalid/banned
   const isVCInvalid = vcStatus === "revoked" || vcStatus === "expired";
   const allDIDsBanned = didEntries.length > 0 && bannedDids.length === didEntries.length;
@@ -313,7 +333,7 @@ export default function ReviewDApp() {
   // ---------- RENDER ----------
   return (
       <div className={`relative h-screen w-full text-[#ccccff] font-orbitron bg-gradient-to-b from-[#0f0f1f] via-[#1a0033] to-[#0f0f1f]
-        ${ expandedCard 
+        ${ expandedCard
           ? "overflow-hidden snap-none"
           : wallet
               ? "overflow-y-scroll snap-y snap-mandatory"
@@ -328,9 +348,9 @@ export default function ReviewDApp() {
         {/* Hero section */}
         <section className="relative z-10 h-screen snap-start flex flex-col items-center justify-center text-center px-4">
           <div className="absolute px-8 py-4 rounded-full backdrop-blur-lg bg-white/10 border z-0" style={{ minWidth: "50%" }} />
-            <DecryptingTitle className="relative z-10 text-[50px] md:text-[50px] font-bold text-cyan-300 drop-shadow-[0_0_20px_#00fff7]"
-                             text="Your Identity. Your Reviews. Your Control." speed={50}
-            />
+          <DecryptingTitle className="relative z-10 text-[50px] md:text-[50px] font-bold text-cyan-300 drop-shadow-[0_0_20px_#00fff7]"
+                           text="Your Identity. Your Reviews. Your Control." speed={50}
+          />
           <div className="mt-12 flex space-x-[50px] items-center justify-center ">
             <button
                 onClick={wallet ? undefined : connectWallet}
@@ -486,8 +506,7 @@ export default function ReviewDApp() {
                                       onDownloadKey={handleDownloadKey}
                                       onLogout={handleLogout}
                                       onDeleteDid={handleDeleteDid}
-                                      activeDid={activeDid}
-                                      setActiveDid={setActiveDid}
+                                      onDidJoinSemaphore={handleDidJoinSemaphore}
                                   />
                                 </>
                             )}
@@ -500,16 +519,24 @@ export default function ReviewDApp() {
                                 />
                             )}
                             {expandedCard === "ZKP Reputation" && (
-                                <ZKPReputationPanel wallet={wallet} />
+                                <ZKPReputationPanel
+                                    wallet={wallet}
+                                    vc={vc}
+                                    didEntries={didEntries}
+                                    activeDid={activeDid}
+                                    setActiveDid={setActiveDid}
+                                    userKeyPair={userKeyPair}
+                                    setUserKeyPair={setUserKeyPair}
+                                />
                             )}
                           </div>
                         </div>
                         <motion.button
                             onClick={() => setExpandedCard(null)}
-                            className="mx-[auto] mt-auto mb-2 mb-[20px] my-auto px-6 py-3 rounded-full shadow-lg bg-cyan-500/20 border-cyan-300/30 hover:bg-cyan-400/20 transition animate-pulse hover:scale-105"
+                            className="bg-[#c9b6fc] hover:bg-[red] rounded-full w-[40px] h-[40px] mb-[20px] flex items-center justify-center mx-auto shadow-neon-cyan transition"
                             style={{ fontSize: "20px", fontWeight: "600" }}
                         >
-                          Close
+                          <CircleX className="w-[30px] h-[30px] text-cyan-400 drop-shadow-[0_0_10px_#00fff7] animate-glow"/>
                         </motion.button>
                       </motion.div>
                   );

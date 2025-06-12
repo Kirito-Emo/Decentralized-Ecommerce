@@ -14,10 +14,23 @@ import validator from "validator";
 import { ethers } from "ethers";
 import fs from "fs";
 import path from "path";
+import { EthrDID } from "ethr-did";
 
 // Contract helpers for admin actions
 const appBanRegistry = require("../scripts/dApp/appBanRegistry.js");
 const appVCRegistry = require("../scripts/dApp/appVCRegistry.js");
+
+// Scripts for user management and ZKP generation
+const {setUser} = require("../scripts/dApp/localDb.js");
+const { expireNFTs } = require("../scripts/dApp/appReviewNFT.js");
+const { recordAttestation } = require("../scripts/dApp/appAttestationRegistry.js");
+const { generateAndSaveSDVP } = require("../scripts/dApp/appVP.js");
+const { generateAndSaveBBSProof } = require("../scripts/dApp/appBBS.js");
+
+// Load
+JSON.parse(fs.readFileSync(path.join(__dirname, "../scripts/contract-addresses.json"), "utf8"));
+// Load ZK proofs directory
+const PROOFS_DIR = path.join(__dirname, "../scripts/dApp/proofs");
 
 // Load issuer from JSON file
 const issuer = JSON.parse(fs.readFileSync(path.join(__dirname, "../scripts/interact/issuer-did.json"), "utf8"));
@@ -39,13 +52,16 @@ function getUserHash({ name, surname, birthDate, nationality }: any) {
 }
 
 // Sanitization and validation for all user input
-function validateUserData({ name, surname, birthDate, nationality }: any) {
-	if (!name || !surname || !birthDate || !nationality)
+function validateUserData({ name, surname, wallet, birthDate, nationality }: any) {
+	if (!name || !surname || !wallet || !birthDate || !nationality)
 		throw new Error("Missing required fields");
 	if (!validator.isAlpha(name, "en-US", { ignore: " " }))
 		throw new Error("Invalid name: letters only");
 	if (!validator.isAlpha(surname, "en-US", { ignore: " " }))
 		throw new Error("Invalid surname: letters only");
+	if (!wallet || typeof wallet !== "string" || !/^0x[a-fA-F0-9]{40}$/.test(wallet)) {
+		throw new Error("Missing or invalid wallet address");
+	}
 	if (!validator.isISO8601(birthDate))
 		throw new Error("Invalid birth date (expected YYYY-MM-DD)");
 	if (!validator.isAlpha(nationality, "en-US", { ignore: " " }))
@@ -105,13 +121,25 @@ app.get("/login-vc", (_req, res) => {
 		<!DOCTYPE html>
 		<html lang="it">
 			<body>
-				<form method="POST" action="/login-vc">
+				<form method="POST" action="/login-vc" id="vc-form">
 					<input name="name" placeholder="Name" required /><br/>
 					<input name="surname" placeholder="Surname" required /><br/>
 					<input type="date" name="birthDate" placeholder="Birthdate (YYYY-MM-DD)" required /><br/>
 					<input name="nationality" placeholder="Nationality" required /><br/>
+					<input name="wallet" type="hidden" id="wallet-input" />
 					<button type="submit">Get VC</button>
 				</form>
+				<script>
+				  // Check if MetaMask is installed and if user is logged in and set the wallet address
+				  window.addEventListener('DOMContentLoaded', async () => {
+				    if (window.ethereum) {
+				      try {
+				        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+				        document.getElementById('wallet-input').value = accounts[0];
+				      } catch {}
+				    }
+				  });
+				</script>
 			</body>
 		</html>
 	`);
@@ -120,8 +148,8 @@ app.get("/login-vc", (_req, res) => {
 // --- Issue VC via SSI ---
 app.post("/login-vc", async (req, res) => {
 	try {
-		const { name, surname, birthDate, nationality } = req.body;
-		validateUserData({ name, surname, birthDate, nationality });
+		const { name, wallet, surname, birthDate, nationality } = req.body;
+		validateUserData({ name, surname, wallet, birthDate, nationality });
 		const userHash = getUserHash({ name, surname, birthDate, nationality });
 		const issuerDID = `${issuer.did}`;
 		const cid = await appVCRegistry.issueNewVC(userHash, name, surname, birthDate, nationality, signer, issuerDID);
@@ -132,8 +160,11 @@ app.post("/login-vc", async (req, res) => {
 			type: ["VerifiableCredential"],
 			issuer: issuerDID,
 			issuanceDate: new Date().toISOString(),
-			credentialSubject: { id: userHash, name, surname, birthDate, nationality, ipfsCid: cid }
+			credentialSubject: { id: userHash, wallet: wallet.toLowerCase(), name, surname, birthDate, nationality, ipfsCid: cid }
 		};
+
+		setUser(userHash, { dids: [], vc });
+
 		const vcBase64 = Buffer.from(JSON.stringify(vc)).toString("base64");
 		res.send(`
 			<!DOCTYPE html>
@@ -245,7 +276,6 @@ app.post("/expire-nfts", async (req, res) => {
 			res.status(400).json({ error: "tokenIds required" });
 			return;
 		}
-		const { expireNFTs } = require("../scripts/dApp/appReviewNFT.js");
 		const tx = await expireNFTs(signer, tokenIds);
 		res.json({ status: "expired", txHash: tx.hash });
 	} catch (err) {
@@ -253,7 +283,122 @@ app.post("/expire-nfts", async (req, res) => {
 	}
 });
 
-// Server start
+// ----------- ZKP ROUTE -----------
+
+// List all proof files (GET /proofs)
+app.get("/proofs", (_req, res) => {
+	try {
+		const files = fs.readdirSync(PROOFS_DIR)
+			.filter(f => f.endsWith(".json"));
+		res.json({ files });
+	} catch (err) {
+		res.status(500).json({ error: (err as Error).message });
+	}
+});
+
+// Get a specific proof file (GET /proofs/:filename)
+app.get("/proofs/:filename", (req, res) => {
+	const filename = req.params.filename;
+	if (!/^[\w\-\.]+\.json$/.test(filename)) {
+		return res.status(400).json({ error: "Invalid filename" });
+	}
+	const filePath = path.join(PROOFS_DIR, filename);
+	if (!fs.existsSync(filePath)) {
+		return res.status(404).json({ error: "File not found" });
+	}
+	res.setHeader("Content-Type", "application/json");
+	fs.createReadStream(filePath).pipe(res);
+});
+
+// Anchor a proof outcome on-chain (POST /anchor-proof)
+app.post("/anchor-proof", async (req, res) => {
+	try {
+		const { filename, proofType } = req.body;
+		if (!/^[\w\-\.]+\.json$/.test(filename)) {
+			return res.status(400).json({ error: "Invalid filename" });
+		}
+		const filePath = path.join(PROOFS_DIR, filename);
+		if (!fs.existsSync(filePath)) {
+			return res.status(404).json({ error: "Proof file not found" });
+		}
+		const proofData = JSON.parse(fs.readFileSync(filePath, "utf8"));
+		const { subjectHash, proofHash } = proofData;
+		if (!subjectHash || !proofHash) {
+			return res.status(400).json({ error: "Invalid proof file: missing subjectHash/proofHash" });
+		}
+		const txHash = await recordAttestation(signer, proofType, subjectHash, proofHash);
+		res.json({ status: "anchored", txHash });
+	} catch (err) {
+		res.status(500).json({ error: (err as Error).message });
+	}
+});
+
+// Delete a proof file (DELETE /proofs/:filename)
+app.delete("/proofs/:filename", (req, res) => {
+	const filename = req.params.filename;
+	if (!/^[\w\-\.]+\.json$/.test(filename)) {
+		return res.status(400).json({ error: "Invalid filename" });
+	}
+	const filePath = path.join(PROOFS_DIR, filename);
+	if (!fs.existsSync(filePath)) {
+		return res.status(404).json({ error: "File not found" });
+	}
+	fs.unlinkSync(filePath);
+	res.json({ status: "deleted" });
+});
+
+// Utility function to load the local database
+const dbPath = path.join(__dirname, "../scripts/dApp/local-db.json");
+function loadDb() {
+	return JSON.parse(fs.readFileSync(dbPath, "utf8"));
+}
+
+// Utility function to retrieve a VC by wallet address
+function findVCByWallet(db: Record<string, any>, wallet: string): any | null {
+	for (const entry of Object.values(db)) {
+		if (typeof entry === "object" && entry && entry.vc && entry.vc.credentialSubject?.wallet?.toLowerCase() === wallet.toLowerCase()) {
+			return entry.vc;
+		}
+	}
+	return null;
+}
+
+// Generate a ZKP proof (POST /generate-proof)
+app.post("/generate-proof", async (req, res) => {
+	try {
+		const { type, wallet, skHex, badgeLevel, reputation} = req.body;
+		const db = loadDb();
+
+		// Retrieve VC by wallet address
+		if (!wallet) return res.status(400).json({ error: "Missing wallet address" });
+		const vc = findVCByWallet(db, wallet);
+		if (!vc) return res.status(404).json({ error: "No VC for this wallet address" });
+
+		// VP
+		if (type === "VP") {
+			if (!skHex) return res.status(400).json({ error: "Missing skHex for EthrDID" });
+
+			const holderDidInstance = new EthrDID({ identifier: wallet, privateKey: skHex });
+			await generateAndSaveSDVP(vc, holderDidInstance, ["nationality"]);
+			return res.json({ status: "ok" });
+		}
+
+		// BBS+
+		if (type === "BBS") {
+			if (badgeLevel == null || reputation == null)
+				return res.status(400).json({ error: "Missing badgeLevel or reputation" });
+			await generateAndSaveBBSProof(wallet, reputation, badgeLevel); // qui badgeNFT = wallet address
+			return res.json({ status: "ok" });
+		}
+
+		return res.status(400).json({ error: "Invalid proof type" });
+	} catch (err) {
+		console.error("generate-proof error:", err);
+		res.status(500).json({ error: (err as Error).message });
+	}
+});
+
+// ----------- BACKEND SERVER START -----------
 app.listen(PORT, () => {
 	console.log(`Backend running at http://localhost:${PORT}`);
 });
