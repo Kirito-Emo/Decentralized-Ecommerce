@@ -20,6 +20,7 @@
     "ethr-did-resolver": "^11.0.3",
     "form-data": "^4.0.2",
     "ipfs-http-client": "^56.0.3",
+    "mathjs": "^14.5.2",
     "solc": "^0.8.25",
     "web3": "^4.16.0"
   }
