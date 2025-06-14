@@ -15,7 +15,7 @@ const path = require("path");
 const math = require("mathjs");
 
 // Load holder DID
-const holder = JSON.parse(fs.readFileSync(path.join(__dirname, "holder-did.json"), "utf8"));
+const holder = JSON.parse(fs.readFileSync(path.join(__dirname, "../interact/holder-did.json"), "utf8"));
 const holderDID = holder.did;
 
 async function main() {
@@ -54,13 +54,11 @@ async function main() {
         const banResult = await sendTx(BanRegistry.banUser, holderDID);
         gasBan.push(banResult.gasUsed);
         timeBan.push(banResult.time);
-        console.log(`✅ Holder DID ${holderDID} has been banned. Gas: ${banResult.gasUsed}, Time: ${banResult.time.toFixed(2)} ms`);
 
         // Unban the holder DID
         const unbanResult = await sendTx(BanRegistry.unbanUser, holderDID);
         gasUnban.push(unbanResult.gasUsed);
         timeUnban.push(unbanResult.time);
-        console.log(`✅ Holder DID ${holderDID} has been unbanned. Gas: ${unbanResult.gasUsed}, Time: ${unbanResult.time.toFixed(2)} ms`);
     }
 
     // Print benchmark statistics

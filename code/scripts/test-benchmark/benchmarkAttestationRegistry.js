@@ -56,7 +56,6 @@ async function main() {
         const txResult = await sendTx(registry.recordAttestation, proofType, attestation.subjectHash, attestation.proofHash);
         gasAttestation.push(txResult.gasUsed);
         timeAttestation.push(txResult.time);
-        console.log(`✅ Attestation anchored. Gas: ${txResult.gasUsed}, Time: ${txResult.time.toFixed(2)} ms`);
     } catch (err) {
         console.error(`Error anchoring attestation: ${err.message}`);
     }
@@ -69,7 +68,6 @@ async function main() {
         const txResult = await sendTx(registry.recordAttestation, proofType, attestation.subjectHash, attestation.proofHash);
         gasAttestation.push(txResult.gasUsed);
         timeAttestation.push(txResult.time);
-        console.log(`✅ Attestation anchored. Gas: ${txResult.gasUsed}, Time: ${txResult.time.toFixed(2)} ms`);
     } catch (err) {
         console.error(`Error anchoring attestation: ${err.message}`);
     }
@@ -81,7 +79,6 @@ async function main() {
         const txResult = await sendTx(registry.recordAttestation, proofType, attestation.subjectHash, attestation.proofHash);
         gasAttestation.push(txResult.gasUsed);
         timeAttestation.push(txResult.time);
-        console.log(`✅ Attestation anchored. Gas: ${txResult.gasUsed}, Time: ${txResult.time.toFixed(2)} ms`);
     } catch (err) {
         console.error(`Error anchoring attestation: ${err.message}`);
     }

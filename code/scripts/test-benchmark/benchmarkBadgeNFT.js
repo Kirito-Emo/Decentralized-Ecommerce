@@ -83,7 +83,6 @@ async function main() {
             await tx.wait();
             console.error("Error: transfer succeeded unexpectedly!");
         } catch (error) {
-            console.log("Transfer prevented as expected:", error.message.split("\n")[0]);
         }
     }
 

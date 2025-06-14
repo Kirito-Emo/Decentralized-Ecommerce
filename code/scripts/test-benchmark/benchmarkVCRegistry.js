@@ -52,7 +52,6 @@ async function main() {
 
             gasRegister.push(Number(rc1.gasUsed));
             timeRegister.push(ms1);
-            console.log(`✅ Registered VC: gas ${rc1.gasUsed}, time ${ms1.toFixed(2)} ms`);
         }
 
         // Revoke VC on-chain
@@ -64,7 +63,6 @@ async function main() {
 
         gasRevoke.push(Number(rc2.gasUsed));
         timeRevoke.push(ms2);
-        console.log(`✅ Revoked VC: gas ${rc2.gasUsed}, time ${ms2.toFixed(2)} ms`);
     }
 
     const printStats = (label, data) => {
