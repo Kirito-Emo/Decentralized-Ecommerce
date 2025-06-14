@@ -1,2 +1,370 @@
 \chapter{WORK PACKAGE 4}
+    In questo capitolo viene presentata l'implementazione del sistema decentralizzato per la gestione delle recensioni online, come delineato nei Work Package precedenti. L'obiettivo principale è dimostrare la realizzabilità tecnica della soluzione proposta nel WP2 e verificarne il corretto comportamento in un contesto applicativo reale. A tal fine, si procede a illustrare l'organizzazione del codice sorgente, i moduli implementati, i meccanismi di interazione previsti sia in modalità programmatica (CLI) che grafica (GUI) e infine le metriche prestazionali rilevate in ambiente simulato.
+    Il capitolo è strutturato in modo da distinguere le componenti che interagiscono direttamente con la blockchain tramite riga di comando (smart contract, script di deploy e interazione) da quelle accessibili tramite interfaccia utente (back-end, mock di identità digitale, dApp). A seguire, sarà effettuata un'analisi delle limitazioni attualmente presenti nel sistema e una discussione sulle possibili evoluzioni future, concludendo il tutto con una valutazione complessiva della robustezza dell'implementazione rispetto agli obiettivi progettuali.
+
+    \section{Smart contracts}
+        L'implementazione dei contratti intelligenti costituisce il nucleo logico del sistema, incaricato di garantire le proprietà crittografiche, reputazionali e comportamentali previste dal modello. Tutti i contratti sono sviluppati in linguaggio Solidity (versione 0.8.25) e sono organizzati all'interno della directory \lstinline{/code/contracts/}. Ciascun contratto è stato progettato per essere modulare, riutilizzabile e ispezionabile, in coerenza con i principi di trasparenza e auditabilità introdotti nel WP2. Le funzioni critiche sono protette da controlli di proprietà, timestamp o firma, per prevenire usi impropri o double-spending/replay attack.\\
+        Di seguito si riporta una sintesi dei contratti sviluppati
+            \begin{itemize}
+                \item \textbf{ReviewNFT.sol} Gestisce l'emissione di NFT soulbound che fungono da prova d'acquisto (Proof-of-Purchase). Ogni token è associato a un identificatore di prodotto, un DID, una data di acquisto e uno stato (valido, usato, scaduto). Il contratto include meccanismi di marcatura automatica dello stato e protezione contro il riutilizzo o la cessione fraudolenta.
+
+                \item \textbf{ReviewStorage.sol} Rappresenta il registro crittograficamente verificabile delle recensioni. Conserva l’hash IPFS del contenuto off-chain, lo stato (attiva, modificata, revocata) e gli eventi storici di modifica. Integra inoltre vincoli temporali (cooldown) e restrizioni di modifica/revoca legate alla proprietà del token.
+
+                \item \textbf{BadgeNFT.sol} Implementa la logica reputazionale mediante NFT soulbound che rappresentano livelli di partecipazione (Bronze, Silver, Gold), aggiornati dinamicamente in funzione del numero e della tempestività delle recensioni effettuate.
+
+                \item \textbf{DIDRegistry.sol} Registra in maniera univoca un DID associato all’hash di una Verifiable Credential. Il contratto garantisce che ciascuna VC venga utilizzata una sola volta e consente la successiva verifica della legittimità del recensore.
+
+                \item \textbf{VCRegistry.sol} Responsabile della verifica delle Verifiable Credential presentate tramite Verifiable Presentation. Include logiche di revoca basate su revocation index e hash su IPFS.
+
+                \item \textbf{BanRegistry.sol} Tiene traccia dei DID bannati in seguito a comportamenti scorretti o fraudolenti. L'inserimento in ban list è irreversibile a livello on-chain e impedisce qualsiasi futura interazione del soggetto col sistema. Il contratto è consultabile pubblicamente ed è richiamato come vincolo di validazione in tutti gli altri moduli.
+
+                \item \textbf{AttestationRegistry.sol} Memorizza attestazioni pubbliche o prove a conoscenza zero (ZKP) che consentono all'utente di dimostrare proprietà aggregate (eg. reputazione) senza compromettere l'anonimato, allegando on-chain l'esito hashato delle prove.
+
+                \item \textbf{Semaphore.sol / SemaphoreVerifier.sol} Moduli ausiliari per la verifica di ZKP secondo lo standard \texttt{Semaphore}. Questi contratti garantiscono la non linkabilità delle interazioni, prevenendo attacchi Sybil e assicurando che ogni azione firmata sia riconducibile a una sola identità logica, senza renderla identificabile.
+            \end{itemize}
+
+        \noindent I contratti sono stati compilati, lanciando il comando: \lstinline{npx hardhat compile}
+
+    \section{Deploy scripts}
+        La procedura di deployment dei contratti intelligenti è stata progettata per garantire riproducibilità, chiarezza operativa e modularità. Essa si articola mediante una serie di script in JavaScript localizzati nella directory \lstinline{/code/scripts/deploy/}, ciascuno dei quali è responsabile del deploy di uno specifico contratto. L'ambiente di esecuzione adottato è Hardhat, configurato per operare in modalità locale con Ganache impostato su \texttt{localhost:8545}, con possibilità di estensione a reti Ethereum compatibili. \\
+        Ogni script segue una struttura uniforme:
+            \begin{itemize}
+                \item inclusione delle librerie Hardhat (\texttt{ethers}) e delle interfacce ABI;
+                \item compilazione e deploy del contratto (con parametri costruttori quando richiesti);
+                \item attesa della conferma di inclusione in blockchain;
+                \item stampa a console dell'indirizzo del contratto deployato e memorizzazione dello stesso in un file apposito (\texttt{contract-addresses.json}).
+            \end{itemize}
+            
+        \noindent L’output del deploy include hash delle transazioni e indirizzi contrattuali, che possono essere verificati tramite \texttt{Hardhat console} o interfacce custom di auditing. Tutti gli script possono essere eseguiti individualmente oppure concatenati tramite uno script composito.
+                
+    \section{Interact scripts (CLI)}
+        Gli script di interazione implementano le operazioni fondamentali che le parti oneste del sistema possono eseguire sulla blockchain, secondo i protocolli descritti nel WP2. Essi permettono di simulare scenari reali, testare le funzionalità dei contratt, e validare il corretto comportamento delle entità coinvolte. Tali script, collocati nella directory \lstinline{/code/scripts/interact/}, sono sviluppati in JavaScript e utilizzano il frame-work \texttt{Hardhat} in combinazione con \texttt{ethers.js} per l'interazione diretta con gli smart contract.
+        Ogni script è autonomo e richiamabile da riga di comando. I parametri (indirizzi, hash, identificativi NFT) sono forniti direttamente nel codice o tramite file di configurazione. Gli script producono log dettagliati per ogni operazione eseguita, inclusi gli esiti di verifica e gli hash delle transazioni generate. \\
+        Le operazioni principali supportate sono le seguenti:
+            \begin{itemize}
+                \item \texttt{CHANGE-THIS-FILE-fetchDID.js} \\
+                Deriva identità Ethereum reali (2 issuer e 2 holder) da un mnemonic Ganache, genera quattro DID, uno per ogni identità, e salva localmente i corrispondenti file \texttt{issuer/holder.json} per l'uso negli altri script.\\
+                NOTA: Il nome del file va modificato in fetchDID.js e il mnemonic va cambiato con il proprio di Ganache locale.
+                
+                \item \texttt{interactReviewNFT.js} \\
+                Simula il minting di un NFT soulbound associato a un prodotto e a un holder DID, e successivamente il suo utilizzo (marcandolo come usato) per autorizzare una recensione.
+            
+                \item \texttt{interactReviewStorage.js} \\
+                Carica un contenuto testuale su IPFS, associa l’hash generato a un NFT valido e ne registra l’hash nel contratto \texttt{ReviewStorage}. Inoltre, dimostra la possibilità di aggiornare una recensione con un nuovo CID, preservando lo storico.
+            
+                \item \texttt{interactVCRegistry.js} \\
+                Firma off-chain una Verifiable Credential (VC), ne calcola l’hash, la registra nel contratto \texttt{VCRegistry}, ne verifica la validità e ne simula la revoca. Prevede uso combinato con \texttt{DIDRegistry}.
+            
+                \item \texttt{interactDIDRegistry.js} \\
+                Esegue operazioni di consultazione e aggiornamento sul registro delle identità decentralizzate, tra cui owner lookup, aggiunta/rimozione delegati e cambio proprietario del DID.
+            
+                \item \texttt{interactBadgeNFT.js} \\
+                Interagisce con il contratto \texttt{BadgeNFT} per verificare la logica di assegnazione e aggiornamento dei badge reputazionali. Include la verifica della non trasferibilità del token.
+            
+                \item \texttt{interactAttestationRegistry.js} \\
+                Registra attestazioni crittografiche derivate da prove di tipo \texttt{Semaphore}, \texttt{BBS+} o \texttt{VP}. L'utente può scegliere il tipo di prova da ancorare specificando parametri via CLI.
+            
+                \item \texttt{interactBanRegistry.js} \\
+                Inserisce o rimuove un DID dalla lista dei soggetti bannati nel contratto \texttt{BanRegistry}, mostrando il relativo stato prima e dopo l’operazione.
+            
+                \item \texttt{verifyVP.js} \\
+                Genera e verifica una Verifiable Presentation (VP) standard e una sua variante Selective Disclosure (SD-JWT). Produce hash riutilizzabili in attestazioni successive.
+            
+                \item \texttt{verifyBBS.js} \\
+                Dimostra la generazione e la verifica di una prova \texttt{BBS+}, partendo da una VC firmata. Supporta selective disclosure e verifica di validità crittografica della sottoprova.
+
+                \item \texttt{verifySemaphore.js} \\
+                Crea un gruppo \texttt{Semaphore}, genera una Zero-Knowledge Proof basata su Merkle tree e verifica on-chain la validità della prova tramite \texttt{validateProof()}.
+            \end{itemize}
+        
+        \noindent La separazione tra fase di deploy e fase di interazione consente un testing modulare, utile sia per validare singoli contratti, sia per eseguire scenari end-to-end. Tutti gli script sono progettati per poter essere integrati in pipeline CI/CD o in ambienti di test automatico. Tutti gli script possono essere eseguiti individualmente oppure concatenati tramite uno script composito.
+
+    \section{Interazione via GUI}
+        A complemento degli script CLI, il sistema implementa una serie di componenti ad interfaccia grafica che consentono l'interazione utente tramite browser. Tali moduli sono concepiti per offrire un'esperienza d'uso completa, accessibile anche a utenti non tecnici, e riproducono integralmente i flussi funzionali definiti nel WP2. \\
+        L'interazione si basa su 3 diverse componenti:
+            \begin{itemize}
+                \item \textbf{Back-end Express:} funge da nodo ausiliario per la gestione delle credenziali, la generazione delle Verifiable Credential (VC) e l'interazione REST con la rete blockchain.
+                
+                \item \textbf{Identity Provider Mock (IdP):} un modulo simulato conforme ai requisiti di SPID, responsabile dell’autenticazione iniziale e dell’emissione controllata delle credenziali in formato SAML2.
+                
+                \item \textbf{Frontend React (dApp):} una piattaforma decentralizzata lato client, attraverso cui l’utente può registrarsi, visualizzare NFT, inviare recensioni, consultare lo storico e dimostrare la propria reputazione tramite VP/BBS+/ZKP.
+            \end{itemize}
+        
+        \noindent A differenza degli script CLI, che sono orientati alla validazione funzionale dei singoli contratti, l’interfaccia GUI realizza una simulazione integrata del sistema in condizioni realistiche, consentendo l’emulazione completa del ciclo di vita di una recensione (dall’autenticazione fino all’audit pubblico). Nei paragrafi seguenti, ciascun componente sarà descritto in termini di obiettivi funzionali, struttura, interfacce e meccanismi di comunicazione con la blockchain.
+
+        \subsection{Server Backend Express}
+            Il back-end dell'applicazione è implementato come server \texttt{Express} scritto in \texttt{TypeScript} (file \texttt{server.ts}), con l'obiettivo di gestire l'interazione off-chain tra l'utente, il sistema di identità e la rete blockchain. Esso funge da punto di intermediazione fidata per la creazione delle Verifiable Credential (VC) e l’invio di Verifiable Presentation (VP), in conformità con le specifiche tecniche del paradigma Self-Sovereign Identity (SSI).
+            
+            \subsubsection{Funzionalità principali}  
+                \noindent Il backend offre un insieme di endpoint REST che implementano le seguenti funzionalità:
+                    \begin{itemize}
+                        \item \textbf{Autenticazione dell’utente} tramite SPID (simulata) o sistema di login decentralizzato.
+
+                        \item \textbf{Validazione e sanificazione} dei dati ricevuti dal frontend, con controllo formale di correttezza (es. campi alfabetici, indirizzi wallet validi).
+                        
+                        \item \textbf{Generazione di VC} firmate con chiave privata dell’Issuer, in formato JWT conforme a \texttt{did-jwt-vc}.
+                        
+                        \item \textbf{Revoca e verifica} di VC tramite accesso alla Revocation List distribuita su IPFS.
+                        
+                        \item \textbf{Accesso ai moduli di attuazione on-chain}, come:
+                            \begin{itemize}
+                                \item \texttt{appBanRegistry.js} – per ban/unban di DID;
+                                
+                                \item \texttt{appReviewNFT.js} – per esecuzione automatica della funzione \texttt{expireNFTs()};
+                                
+                                \item \texttt{appAttestationRegistry.js} – per registrare attestazioni crittografiche;
+                                                                
+                                \item \texttt{appVP.js}, \texttt{appBBS.js} – per generazione e archiviazione locale di prove ZKP (SD-JWT, BBS+).
+                            \end{itemize}
+                    \end{itemize}
+            
+            \subsubsection{Struttura del codice}
+                \noindent All'avvio, il server carica le chiavi dell’\textit{Issuer} da file \texttt{issuer-did.json} e configura un signer Ethereum (via \texttt{ethers.Wallet}) per autorizzare operazioni su contratti. La rete attesa è un endpoint JSON-RPC locale, compatibile con Ganache o Hardhat. \\
+                Tra le funzioni implementate nel back-end si evidenziano:
+                    \begin{itemize}
+                        \item \texttt{getUserHash()} – derivazione SHA-256 di un'identità utente simulata, concatenando i campi del form apposito per il rilascio della VC;
+                        
+                        \item supporto per \texttt{Selective Disclosure};
+                    \end{itemize}
+            
+            \subsubsection{Interfacciamento on-chain}
+                \noindent Il back-end funge da \textit{Issuer} autorizzato e pubblica le hash delle VC nel contratto \texttt{VCRegistry}, fornendo il riferimento per la verifica crittografica durante la registrazione dell'utente nel \texttt{DIDRegistry}. Esso opera come ponte tra identità off-chain (verificate) e entità on-chain, garantendo che ogni DID sia collegato a una sola identità reale, ma senza rivelarne l'identificativo.
+            
+            \subsubsection{Ruolo nel sistema}
+                \noindent Il back-end agisce come nodo di controllo fidato per operazioni amministrative e simulazioni di comportamento realistico (eg. utenti inattivi, revoca NFT, ban manuali). Inoltre, fornisce utili astrazioni per il popolamento iniziale del sistema e per l'integrazione con prove generate off-chain.
+
+        \subsection{Identity Provider Mock}
+            L'emulazione dell’Identity Provider è realizzata mediante un server indipendente localizzato nella directory \lstinline{/code/idp-mock/}, implementato con \texttt{Express-TypeScript} e contenuto nel file \texttt{server.ts}. Questo componente ha lo scopo di simulare, in ambiente controllato, il comportamento essenziale di un Identity Provider conforme al profilo SPID, limitandosi alla generazione di una \textit{SAML2 Response} non firmata contenente un'asserzione di autenticazione.
+            È stato implementato per scopi puramente dimostrativi delle potenzialità e per offrire un'alternativa di login federata, così da ottenere compatibilità anche con sistemi quali eIDAS-2.0 (EUDIW).
+            
+            \subsubsection{Flusso di autenticazione}
+                \noindent Il server espone un endpoint POST su \texttt{/sso}, che emula la fase di login dell'utente. Alla ricezione della richiesta, il server costruisce:
+                    \begin{itemize}
+                        \item una \textbf{SAML2 Assertion} contenente i campi \texttt{Subject}, \texttt{Issuer}, \texttt{Conditions} e \texttt{AuthnStatement};
+                        
+                        \item una \textbf{SAML2 Response} che incapsula tale assertion, formattata secondo lo standard \texttt{urn:oasis:names:tc:SAML:2.0}.
+                    \end{itemize}
+            
+                \noindent Tutti i dati sono generati dinamicamente con riferimenti temporali coerenti, ma la risposta non è firmata digitalmente, in quanto l'obiettivo è esclusivamente dimostrativo.
+            
+            \subsubsection{Comunicazione con il Service Provider}
+                \noindent Il server restituisce una pagina HTML contenente un form POST automatico verso l'endpoint \texttt{/assert} del backend applicativo (in ascolto su porta \texttt{8082}). Il campo \texttt{SAMLResponse} include la risposta codificata in Base64, simulando il comportamento effettivo di un browser dopo login SPID.
+            
+            \subsubsection{Caratteristiche tecniche}
+                \begin{itemize}
+                    \item Porta di ascolto: \texttt{8443};
+                    
+                    \item Protocollo: HTTP semplice, senza TLS;
+                    
+                    \item Linguaggio: \texttt{TypeScript}, con dipendenze minime;
+                \end{itemize}
+            
+            \subsubsection{Limitazioni}
+                \noindent Il mock non implementa alcuna firma XML, validazione degli attributi, gestione sessione o Discovery Service, e non rispetta pienamente lo standard SPID. Tuttavia, la struttura della risposta è conforme e può essere facilmente estesa per includere una firma XML, supporto a certificati X.509 e controllo degli ID.
+            
+            \subsubsection{Funzione nel sistema}
+                \noindent Il mock IdP rappresenta un componente fondamentale per simulare un'alternativa al rilascio controllato dell'identità iniziale e per testare localmente il flusso completo di autenticazione SPID, senza dipendere da ambienti esterni o provider ufficiali. Il collegamento tra questo modulo e il backend consente di generare un'identità logica che verrà successivamente associata ad una VC.
+            
+        \subsection{Frontend React (dApp)}
+            L'interfaccia grafica per l'utente finale è realizzata tramite una \textit{decentralized application} (dApp) sviluppata in \texttt{React} e scritta interamente in \texttt{TypeScript}, con utilizzo di \texttt{Vite} per il bundling e \texttt{TailwindCSS} per la gestione dello stile. L'obiettivo del frontend è rendere accessibile l'interazione con i contratti e la logica reputazionale in modalità completamente client-side, mantenendo al contempo compatibilità con le librerie crittografiche utilizzate off-chain. L'interfaccia utente del sistema è organizzata in forma modulare, con componenti React raggruppati in \texttt{Panel}, ciascuno responsabile di una sezione logica della dApp. Ogni pannello è implementato come componente \texttt{.tsx} indipendente e importato nella struttura principale della pagina tramite il file \texttt{ReviewDApp.tsx}. Di seguito si analizzano i tre pannelli principali presenti nel sistema. La dApp dispone di script interattivi appositamente creati per l'utilizzo in questo campo, separandoli dunque dall'interazione effettuata tramite CLI. 
+
+            \subsubsection{Struttura generale}
+                \noindent Il file principale \texttt{App.tsx} definisce l'interfaccia di alto livello e carica il componente \texttt{ReviewDApp}, che gestisce la logica principale della dApp. Quest'ultimo si occupa di orchestrare l'interazione con i wallet (via MetaMask), il caricamento e la visualizzazione delle componenti chiave: identità decentralizzate, credenziali, NFT di acquisto, recensioni e badge reputazionali.
+
+            \subsubsection{WalletAccessPanel}
+                \noindent Il pannello \texttt{WalletAccessPanel} gestisce l'interazione iniziale con il wallet dell'utente e la visualizzazione delle sue credenziali. Il pannello incorpora internamente i componenti \texttt{DIDTable.tsx} e \texttt{VCCard.tsx}, consentendo un'interfaccia coesa tra identità e credenziali. \\
+                Le funzionalità includono:
+                    \begin{itemize}
+                        \item connessione al wallet Ethereum tramite MetaMask;
+                        
+                        \item lettura e visualizzazione della VC dell'utente;
+                        
+                        \item creazione (tramite funzione EdDSA) e visualizzazione dei DID e del loro stato (registrato, bannato), con possibilità di eliminarli;                        
+                    \end{itemize}
+                
+            \subsubsection{SignedReviewsPanel}
+                \noindent Questo pannello è incaricato della gestione e consultazione delle recensioni pubblicate. Il caricamento dei contenuti testuali delle recensioni è effettuato lato client mediante IPFS, utilizzando \texttt{ipfs-http-client}. Le operazioni gestite includono:
+                    \begin{itemize}
+                        \item minting di un NFT (inserito per testing);
+
+                        \item selezione del DID e del NFT che si vogliono utilizzare per recensire;
+                        
+                        \item campo testuale per la scrittura del contenuto della recensione;
+                        
+                        \item bottone per l'invio della recensione firmata al contratto \texttt{ReviewStorage}, con validazione del corrispondente NFT;
+                        
+                        \item visualizzazione delle recensioni associate all'utente corrente;
+                        
+                        \item tracciamento delle modifiche e delle revoche, con CID e date coerenti.
+                    \end{itemize}
+                
+            \subsubsection{ZKPReputationPanel}
+                \noindent Tale pannello consente all'utente di generare e gestire prove circa l'identità e la propria reputazione aggregata. \\
+                Esso offre:
+                    \begin{itemize}
+                        \item interfaccia per selezionare il tipo di prova desiderata (SD-JWT, BBS+, Semaphore);
+                        
+                        \item generazione della prova in locale (per VP SD-JWT e BBS+);
+                        
+                        \item ancoraggio dell'esito hashato on-chain (per VP SD-JWT e BBS+);
+                        
+                        \item generazione, verifica e ancoraggio on-chain per Semaphore.
+                    \end{itemize}
+
+    \section{Come testare}
+        Per testare il comportamento di ogni componente finora descritta, è suggerito eseguire i seguenti passaggi:
+            \begin{enumerate}
+                \item \texttt{git clone https://github.com/Kirito-Emo/Decentralized-Ecommerce.git}
+
+                \item \texttt{cd code/ \&\& npm install}
+
+                \item \texttt{npx hardhat compile}
+
+                \item
+                    \begin{verbatim}
+npx hardhat run scripts/deploy/deployBanRegistry.js --network localhost
+npx hardhat run scripts/deploy/deployReviewNFT.js --network localhost
+npx hardhat run scripts/deploy/deployBadgeNFT.js --network localhost
+npx hardhat run scripts/deploy/deployReviewStorage.js --network localhost
+npx hardhat run scripts/deploy/deployVCRegistry.js --network localhost
+npx hardhat run scripts/deploy/deployAttestationRegistry.js --network localhost
+npx hardhat run scripts/deploy/deploySemaphoreVerifier.js --network localhost
+npx hardhat run scripts/deploy/deploySemaphore.js --network localhost
+npx hardhat run scripts/deploy/deployDIDRegistry.js --network localhost
+                    \end{verbatim}
+
+                \item
+                    \begin{verbatim}
+npx hardhat run scripts/interact/fetchDID.js --network localhost
+npx hardhat run scripts/interact/interactBanRegistry.js --network localhost
+npx hardhat run scripts/interact/interactReviewStorage.js --network localhost
+npx hardhat run scripts/interact/interactReviewNFT.js --network localhost
+npx hardhat run scripts/interact/interactBadgeNFT.js --network localhost
+npx hardhat run scripts/interact/interactDIDRegistry.js --network localhost
+npx hardhat run scripts/interact/interactVCRegistry.js --network localhost
+npx hardhat run scripts/interact/verifyVP.js --network localhost
+npx hardhat run scripts/interact/interactAttestationRegistry.js --network localhost
+npx hardhat run scripts/interact/verifyBBS.js --network localhost
+npx hardhat run scripts/interact/verifySemaphore.js --network localhost
+                    \end{verbatim}
+
+                \item \texttt{cd code/backend \&\& npm install \&\& npm start}
+
+                \item \texttt{cd code/idp-mock \&\& npm install \&\& npm start}
+
+                \item \texttt{cd code/frontend \&\& npm install \&\& npm run dev}
+            \end{enumerate}
+
+        \noindent Le componenti necessitano di differenti pacchetti npm, per tale motivo è necessario effettuare diversi \texttt{npm install} a seconda della cartella in cui si naviga. Tale scelta è stata presa con l'idea di modularizzare il sistema e renderlo flessibile e lightweight per coloro che intendessero testare esclusivamente via CLI, lasciando la decisione di installare ulteriori pacchetti relativi alla GUI, solo a coloro che intendessero testare il sistema nella sua interezza.
+
+    \section{Prestazioni del Sistema}
+        In questa sezione, analizziamo le prestazioni dei contratti intelligenti utilizzati nel sistema decentralizzato di recensioni per l'e-commerce. I seguenti benchmark sono stati condotti per misurare il consumo di gas e i tempi di esecuzione delle funzioni più critiche: \texttt{ReviewNFT}, \texttt{ReviewStorage}, \texttt{BadgeNFT}, \texttt{VCRegistry}, \texttt{DIDRegistry}, \texttt{BanRegistry} e \texttt{AttestationRegistry}.
+
+        \subsection{Benchmark di Consumo di Gas e Tempo di Esecuzione}
+            \begin{table}[H]
+                \centering
+                    \resizebox{\textwidth}{!}{
+                        \begin{tabular}{|l|l|l|l|}
+                            \hline
+                            \textbf{Funzione} & \textbf{Consumo Gas (Avg)} & \textbf{Tempo di Esecuzione (Avg)} & \textbf{Tempo di Esecuzione (Std Dev)} \\ \hline
+                            
+                            \texttt{ReviewNFT (mint + use)} & 240,589  & 75.88 ms  & 5.21 ms                            \\ \hline
+                            
+                            \texttt{ReviewStorage (store + update)} & 297,816   & 75.10 ms & 5.40 ms                        \\ \hline
+                            
+                            \texttt{BadgeNFT (updateReputation)}  & 44,692  & 95.60 ms  & 7.98 ms                           \\ \hline
+                            
+                            \texttt{VCRegistry (register + revoke)} & 213,157 & 52.13 ms & 3.88 ms                          \\ \hline
+                            
+                            \texttt{DIDRegistry (changeOwner)}    & 32,465 & 25.10 ms & 4.11 ms                             \\ \hline
+                            
+                            \texttt{BanRegistry (ban + unban)}   & 49,406 & 20.50 ms & 2.52 ms                              \\ \hline
+                            
+                            \texttt{AttestationRegistry (anchoring attestation)} & 115,678 & 142.68 ms & 0.00 ms            \\ \hline
+                        \end{tabular}
+                    }
+                \caption{Consumo di Gas e Tempo di Esecuzione dei Contratti}
+                \label{tab:gas_time_benchmark}
+            \end{table}
+            
+        \subsection{Efficienza del Consumo di Gas e del Tempo di Esecuzione}
+            I dati indicano che le funzioni \texttt{minting} e \texttt{storing reviews} sono le operazioni più costose in termini di gas, con \texttt{ReviewNFT} e \texttt{ReviewStorage} che richiedono più di 240.000 gas (240,589 e 297,816 gas rispettivamente) e tempi di esecuzione simili (circa 75 ms). Questi sono costi attesi per le interazioni blockchain, considerando la complessità della gestione di NFT e della memorizzazione delle recensioni sulla blockchain.
+        
+                - **\texttt{ReviewNFT (mint + use)}** e **\texttt{ReviewStorage (store + update)}** sono entrambe molto costose in termini di gas, ma i tempi di esecuzione sono rapidi (circa 75 ms), il che è accettabile per operazioni interattive con l'utente.
+        
+                - **\texttt{BadgeNFT (updateReputation)}** è la funzione meno costosa in termini di consumo di gas (44,692 gas), ma il tempo di esecuzione è più lungo (95.60 ms), suggerendo che, sebbene il consumo di gas sia basso, la logica interna della funzione potrebbe comportare passaggi aggiuntivi che aumentano il tempo di esecuzione.
+        
+                - Le funzioni \texttt{VCRegistry} e \texttt{DIDRegistry}, come la registrazione e il cambio del proprietario, sono molto efficienti sia in termini di gas che di tempo, con costi di gas inferiori a 220.000 e tempi di esecuzione di circa 50 ms.
+        
+                - La funzione \texttt{BanRegistry} (ban/unban) è estremamente efficiente, con il consumo di gas più basso, pari a 49,406 e tempi di esecuzione rapidi (20 ms).
+        
+                - La funzione \texttt{AttestationRegistry}, responsabile dell'ancoraggio delle attestazioni, è relativamente più lenta (142.68 ms), probabilmente a causa del processamento aggiuntivo necessario per validare e ancorare le attestazioni sulla blockchain.
+        
+        \subsection{Valutazione delle Prestazioni}
+            \begin{table}[H]
+                \centering
+                    \resizebox{\textwidth}{!}{
+                        \begin{tabular}{|l|l|}
+                            \hline
+                            \textbf{Funzione}                    & \textbf{Valutazione delle Prestazioni}                            \\ \hline
+                            \texttt{ReviewNFT (mint + use)}       & Alto consumo di gas, ma tempi di esecuzione ragionevoli. Adatto per operazioni occasionali di minting. \\ \hline
+                            \texttt{ReviewStorage (store + update)}  & Costoso in termini di gas, ma ottimizzato nei tempi di esecuzione, adatto per la gestione periodica delle recensioni. \\ \hline
+                            \texttt{BadgeNFT (updateReputation)}  & Efficiente in termini di gas, ma i tempi di esecuzione potrebbero essere migliorati per una migliore esperienza utente. \\ \hline
+                            \texttt{VCRegistry (register + revoke)} & Molto efficiente per la registrazione e la revoca, garantendo operazioni fluide nel sistema. \\ \hline
+                            \texttt{DIDRegistry (changeOwner)}    & Ottimizzato, efficiente e veloce. Adatto per interazioni rapide da parte dell'utente. \\ \hline
+                            \texttt{BanRegistry (ban + unban)}    & Estremamente efficiente, adatto per funzioni frequentemente invocate. \\ \hline
+                            \texttt{AttestationRegistry (anchoring attestation)} & Richiede più tempo di esecuzione, ma i costi di gas sono nei limiti accettabili per operazioni infrequenti. \\ \hline
+                        \end{tabular}
+                    }
+                    \caption{Valutazione delle Prestazioni delle Funzioni}
+                \label{tab:performance_eval}
+            \end{table}
+        
+        \subsection{Analisi del Gas e del Tempo: Confronto con Sistemi Tradizionali}
+            Nei sistemi tradizionali, operazioni come la memorizzazione delle recensioni degli utenti o l'elaborazione dei cambiamenti di reputazione fanno affidamento su database centralizzati, con costi di gas trascurabili. Tuttavia, sulla blockchain, ogni transazione richiede gas, rendendo queste operazioni più costose. Nonostante ciò, la natura decentralizzata del sistema offre vantaggi significativi, come:
+                \begin{itemize}
+                    \item Immutabilità: La blockchain garantisce che le recensioni e le transazioni non possano essere modificate, assicurando l'autenticità.
     
+                    \item Trasparenza: Tutte le azioni sono verificabili pubblicamente sulla blockchain, il che aumenta la fiducia
+    
+                    \item Resistenza alla Censura: Nessuna autorità centrale può alterare o rimuovere i dati, proteggendo l'integrità delle recensioni
+                \end{itemize}
+    
+            \noindent Considerando questi fattori, i maggiori costi di gas sono giustificati dall'aumentata sicurezza e trasparenza fornita dalla blockchain.
+        
+    \section{Limitazioni e sviluppi futuri}
+        Nonostante l'implementazione rispetti fedelmente le specifiche delineate nei Work Package precedenti, alcune funzionalità rimangono parzialmente sviluppate o soggette a margini di miglioramento, sia sotto il profilo tecnico che crittografico. In questa sezione si analizzano le principali limitazioni identificate durante la fase di sviluppo e test, proponendo al contempo possibili evoluzioni future.
+        
+        \subsection{Limitazioni attuali}
+            \begin{itemize}
+                \item \textbf{Revoca delle VC parziale} \\
+                Il sistema prevede un meccanismo di revoca delle VC tramite una lista off-chain (bitstring su IPFS), ma tale lista non è aggiornata dinamicamente dal backend né gestita tramite interfacce dedicate. L'aggiornamento della revocation list avviene manualmente.
+            
+                \item \textbf{Assenza di firma XML} \\
+                Il mock IdP emette risposte SAML2 non firmate. Sebbene utile per test didattici, ciò limita l'aderenza allo standard SPID e impedisce l'integrazione con reali Service Provider compatibili.
+            
+                \item \textbf{Interazione IPFS locale} \\
+                Il caricamento dei contenuti su IPFS richiede un nodo locale attivo sulla porta \texttt{5001}. Non è prevista integrazione con gateway pubblici o fallback automatici in caso di errore.
+            \end{itemize}
+        
+        \subsection{Evoluzioni possibili}
+            \begin{itemize}
+                \item \textbf{Supporto per SPID reale} \\
+                L'integrazione di una firma XML (con librerie come \texttt{xml-crypto} e certificati auto-firmati) consentirebbe il collegamento con simulatori SPID conformi.
+            
+                \item \textbf{Gestione automatica revoche} \\
+                Un modulo backend può essere implementato per aggiornare dinamicamente la revocation list su IPFS, generando e firmando la nuova versione in modo compatibile con i contratti.
+            
+                \item \textbf{Transizione a Layer 2} \\
+                Per ridurre i costi del gas, è previsto il porting della piattaforma su rete Layer 2 compatibile con Ethereum (eg. Arbitrum, Optimism), mantenendo le garanzie di trasparenza e auditabilità.
+            
+                \item \textbf{Dashboard di audit pubblica} \\
+                È possibile sviluppare una dashboard esterna per consultare statistiche aggregate sul sistema, anomalie comportamentali e reputazione distribuita.
+            \end{itemize}
+        
+    \section{Conclusione}
+        L'implementazione presentata in questo Work Package dimostra la fattibilità tecnica della soluzione progettata nel WP2, confermando la coerenza rispetto al modello concettuale delineato nel WP1 e alla valutazione di sicurezza svolta nel WP3. Il sistema risultante realizza un ambiente decentralizzato, verificabile e pseudo-anonimo per la pubblicazione di recensioni, integrando smart contract Solidity, componenti crittografiche avanzate e un'interfaccia grafica intuitiva. \\
+        Dal punto di vista architetturale, il sistema si compone di una dApp React, un backend minimalista per la gestione delle credenziali e dei flussi ausiliari, un Identity Provider simulato conforme al profilo SPID, e un insieme modulare di contratti deployati su blockchain Ethereum compatibile. Le interazioni critiche (registrazione, recensione, reputazione) sono completamente tracciabili e verificabili on-chain, mentre i contenuti sensibili rimangono off-chain tramite IPFS. \\
+        Nonostante alcune funzionalità, come la firma SAML2, siano attualmente simulate o delegate a script esterni, il sistema fornisce già una base solida per esperimenti futuri nel settore della decentralizzazione delle identità. Le performance osservate in ambiente locale confermano la sostenibilità della soluzione anche in scenari più ampi, con possibilità di ottimizzazione tramite soluzioni Layer 2. \\
+        Nel complesso, l'implementazione non solo soddisfa i requisiti funzionali e di sicurezza posti all'inizio del progetto, ma offre anche un'architettura estensibile e ben documentata, che si presta a essere adattata a contesti applicativi differenti o integrata con componenti avanzati di governance e auditing.
+        
